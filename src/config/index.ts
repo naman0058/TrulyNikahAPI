@@ -26,16 +26,40 @@ function buildDatabaseUrl(): string {
   return `mysql://${username}:${password}@${host}:${port}/${database}`;
 }
 
+function originFromUrl(url: string): string | null {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return null;
+  }
+}
+
+/** Merge CORS_ORIGINS with APP_URL and WEBSITE_URL origins (Swagger + website). */
+function buildCorsOrigins(): string[] {
+  const set = new Set(
+    (process.env.CORS_ORIGINS ?? 'http://localhost:5173')
+      .split(',')
+      .map((o) => o.trim())
+      .filter(Boolean)
+  );
+
+  const appUrl = process.env.APP_URL ?? 'http://localhost:4000';
+  const websiteUrl = process.env.WEBSITE_URL ?? 'http://localhost';
+
+  for (const origin of [originFromUrl(appUrl), originFromUrl(websiteUrl)]) {
+    if (origin) set.add(origin);
+  }
+
+  return [...set];
+}
+
 export const config = {
   env: process.env.NODE_ENV ?? 'development',
   port: parseInt(process.env.PORT ?? '4000', 10),
   apiPrefix: process.env.API_PREFIX ?? '/api/v1',
   appUrl: process.env.APP_URL ?? 'http://localhost:4000',
   websiteUrl: process.env.WEBSITE_URL ?? 'http://localhost',
-  corsOrigins: (process.env.CORS_ORIGINS ?? 'http://localhost:5173')
-    .split(',')
-    .map((o) => o.trim())
-    .filter(Boolean),
+  corsOrigins: buildCorsOrigins(),
   databaseUrl: buildDatabaseUrl(),
   jwt: {
     secret: process.env.JWT_SECRET ?? 'dev-jwt-secret-change-in-production',

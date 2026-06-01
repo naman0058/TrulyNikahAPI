@@ -41,6 +41,9 @@ export function createApp() {
         if (!origin || config.corsOrigins.includes(origin) || config.env === 'development') {
           callback(null, true);
         } else {
+          if (config.env !== 'production') {
+            console.warn(`[CORS] Blocked origin: ${origin}. Allowed: ${config.corsOrigins.join(', ')}`);
+          }
           callback(new Error('Not allowed by CORS'));
         }
       },
