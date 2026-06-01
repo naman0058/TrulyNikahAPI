@@ -1,0 +1,550 @@
+// Prisma schema mapped to existing Laravel MySQL tables.
+// Do NOT run prisma migrate — Laravel owns the schema.
+// Run: npx prisma generate
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                 BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  name               String?   @db.VarChar(255)
+  member_id          String    @unique @db.VarChar(255)
+  email              String    @unique @db.VarChar(255)
+  behalf_of          String?   @db.VarChar(255)
+  contact_number     String?   @unique @db.VarChar(255)
+  gender             String?   @db.VarChar(255)
+  dob                String?   @db.VarChar(255)
+  age                String?   @db.VarChar(255)
+  height             String?   @db.VarChar(255)
+  weight             String?   @db.VarChar(255)
+  country            String?   @db.VarChar(255)
+  state              String?   @db.VarChar(255)
+  city               String?   @db.VarChar(255)
+  parent_country     String?   @db.VarChar(255)
+  parent_state       String?   @db.VarChar(255)
+  parent_city        String?   @db.VarChar(255)
+  with_family        Boolean?
+  marital_status     String?   @db.VarChar(255)
+  mother_tounge      String?   @db.VarChar(255)
+  any_disability     String?   @db.VarChar(255)
+  sect               String?   @db.VarChar(255)
+  cast               String?   @db.VarChar(255)
+  highest_education  String?   @db.VarChar(255)
+  occupation         String?   @db.VarChar(255)
+  occupation_details String?   @db.VarChar(255)
+  college            String?   @db.VarChar(255)
+  annual_income      String?   @db.VarChar(255)
+  have_children      String?   @db.VarChar(255)
+  employed_in        String?   @db.VarChar(255)
+  about_us           String?   @db.LongText
+  profile_picture    String?   @db.VarChar(255)
+  email_verified_at  DateTime?
+  firebase_uid       String?   @db.VarChar(255)
+  phone_verified     Boolean   @default(false)
+  password           String    @db.VarChar(255)
+  status             UserStatus @default(pending)
+  profile_visibility ProfileVisibility @default(everyone)
+  remember_token     String?   @db.VarChar(100)
+  last_login_at      DateTime?
+  created_at         DateTime  @default(now())
+  updated_at         DateTime  @updatedAt
+
+  otps               Otp[]
+  interestsSent      InterestReceived[] @relation("InterestFrom")
+  interestsReceived  InterestReceived[] @relation("InterestTo")
+  messagesSent       Message[]          @relation("MessageSender")
+  messagesReceived   Message[]          @relation("MessageReceiver")
+  subscriptions      Subscription[]
+  trustBadge         TrustBadge?
+  profileManager     ProfileManager?
+  partnerPreferences PartnerPreference[]
+  familyInformation  FamilyInformation[]
+  religiousInfo      ReligiousAndLifeStype[]
+  shortlists         Shortlist[]        @relation("ShortlistOwner")
+  shortlistEntries   Shortlist[]        @relation("ShortlistTarget")
+  ignores            Ignore[]           @relation("IgnoreOwner")
+  ignoredBy          Ignore[]           @relation("IgnoreTarget")
+  profileViews       ProfileView[]      @relation("ProfileViewer")
+  profileViewed      ProfileView[]      @relation("ProfileViewed")
+  contactViews       ContactView[]      @relation("ContactViewer")
+  contactViewed      ContactView[]      @relation("ContactViewed")
+  reportsMade        ReportMember[]     @relation("ReportReporter")
+  reportsReceived    ReportMember[]     @relation("ReportTarget")
+
+  @@map("users")
+}
+
+enum UserStatus {
+  pending
+  deleted
+  block
+  verified
+  free
+  premium
+}
+
+enum ProfileVisibility {
+  no_one    @map("no-one")
+  everyone
+  interested
+  verified
+  premium
+}
+
+model Admin {
+  id             BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  name           String    @db.VarChar(255)
+  email          String    @db.VarChar(255)
+  contact_number String    @db.VarChar(255)
+  password       String    @db.VarChar(255)
+  otp            String?   @db.VarChar(255)
+  otp_expires_at DateTime?
+  created_at     DateTime  @default(now())
+  updated_at     DateTime  @updatedAt
+
+  @@map("admins")
+}
+
+model Otp {
+  id         BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  user_id    BigInt   @db.UnsignedBigInt
+  mobile     String   @db.VarChar(15)
+  otp        String   @db.VarChar(10)
+  expires_at DateTime
+  is_used    Boolean  @default(false)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([mobile])
+  @@map("otps")
+}
+
+model Country {
+  id         BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  name       String   @db.VarChar(255)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  states     State[]
+
+  @@map("countries")
+}
+
+model State {
+  id         BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  name       String   @db.VarChar(255)
+  country_id BigInt   @db.UnsignedBigInt
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  country    Country  @relation(fields: [country_id], references: [id])
+  cities     City[]
+
+  @@map("states")
+}
+
+model City {
+  id         BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  name       String   @db.VarChar(255)
+  state_id   BigInt   @db.UnsignedBigInt
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  state      State    @relation(fields: [state_id], references: [id])
+
+  @@map("cities")
+}
+
+model Caste {
+  id         BigInt     @id @default(autoincrement()) @db.UnsignedBigInt
+  caste      String?    @db.VarChar(255)
+  created_at DateTime   @default(now())
+  updated_at DateTime   @updatedAt
+  subCastes  SubCaste[]
+
+  @@map("castes")
+}
+
+model SubCaste {
+  id         BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  subcaste   String?  @db.VarChar(255)
+  caste_id   BigInt   @db.UnsignedBigInt
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  caste      Caste    @relation(fields: [caste_id], references: [id])
+
+  @@map("sub_castes")
+}
+
+model InterestReceived {
+  id           BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  from_user_id BigInt   @db.UnsignedBigInt
+  to_user_id   BigInt   @db.UnsignedBigInt
+  acceptance   Boolean  @default(false)
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+  fromUser     User     @relation("InterestFrom", fields: [from_user_id], references: [id], onDelete: Cascade)
+  toUser       User     @relation("InterestTo", fields: [to_user_id], references: [id], onDelete: Cascade)
+
+  @@map("interest_receiveds")
+}
+
+model Message {
+  id          BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  sender_id   BigInt    @db.UnsignedBigInt
+  receiver_id BigInt    @db.UnsignedBigInt
+  message     String    @db.Text
+  read_at     DateTime?
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+  sender      User      @relation("MessageSender", fields: [sender_id], references: [id], onDelete: Cascade)
+  receiver    User      @relation("MessageReceiver", fields: [receiver_id], references: [id], onDelete: Cascade)
+
+  @@map("messages")
+}
+
+model Shortlist {
+  id                  BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  user_id             BigInt   @db.UnsignedBigInt
+  shortlisted_user_id BigInt   @db.UnsignedBigInt
+  created_at          DateTime @default(now())
+  updated_at          DateTime @updatedAt
+  user                User     @relation("ShortlistOwner", fields: [user_id], references: [id], onDelete: Cascade)
+  shortlistedUser     User     @relation("ShortlistTarget", fields: [shortlisted_user_id], references: [id], onDelete: Cascade)
+
+  @@map("shortlists")
+}
+
+model Ignore {
+  id              BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  user_id         BigInt   @db.UnsignedBigInt
+  ignored_user_id BigInt   @db.UnsignedBigInt
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+  user            User     @relation("IgnoreOwner", fields: [user_id], references: [id], onDelete: Cascade)
+  ignoredUser     User     @relation("IgnoreTarget", fields: [ignored_user_id], references: [id], onDelete: Cascade)
+
+  @@map("ignores")
+}
+
+model ReportMember {
+  id             BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  user_id        BigInt   @db.UnsignedBigInt
+  report_user_id BigInt   @db.UnsignedBigInt
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+  reporter       User     @relation("ReportReporter", fields: [user_id], references: [id], onDelete: Cascade)
+  reported       User     @relation("ReportTarget", fields: [report_user_id], references: [id], onDelete: Cascade)
+
+  @@map("report_members")
+}
+
+model ProfileView {
+  id             BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  viewer_id      BigInt   @db.UnsignedBigInt
+  viewed_user_id BigInt   @db.UnsignedBigInt
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+  viewer         User     @relation("ProfileViewer", fields: [viewer_id], references: [id], onDelete: Cascade)
+  viewedUser     User     @relation("ProfileViewed", fields: [viewed_user_id], references: [id], onDelete: Cascade)
+
+  @@map("profile_views")
+}
+
+model ContactView {
+  id             BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  viewer_id      BigInt   @db.UnsignedBigInt
+  viewed_user_id BigInt   @db.UnsignedBigInt
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+  viewer         User     @relation("ContactViewer", fields: [viewer_id], references: [id], onDelete: Cascade)
+  viewedUser     User     @relation("ContactViewed", fields: [viewed_user_id], references: [id], onDelete: Cascade)
+
+  @@map("contact_views")
+}
+
+model Plan {
+  id                       BigInt        @id @default(autoincrement()) @db.UnsignedBigInt
+  name                     String        @db.VarChar(255)
+  slug                     String        @unique @db.VarChar(255)
+  user_id                  BigInt?       @db.UnsignedBigInt
+  description              String?       @db.Text
+  unlimited_messages       Boolean       @default(false)
+  premium_tag              Boolean       @default(false)
+  unlimited_photo_request  Boolean       @default(false)
+  unlimited_profile_view   Boolean       @default(false)
+  customer_support         Boolean       @default(false)
+  profile_boost_up         Boolean       @default(false)
+  validity_type            ValidityType
+  feature_one              String?       @db.VarChar(255)
+  feature_two              String?       @db.VarChar(255)
+  feature_three            String?       @db.VarChar(255)
+  feature_four             String?       @db.VarChar(255)
+  feature_five             String?       @db.VarChar(255)
+  feature_six              String?       @db.VarChar(255)
+  feature_seven            String?       @db.VarChar(255)
+  feature_eight            String?       @db.VarChar(255)
+  status                   Boolean       @default(true)
+  created_at               DateTime      @default(now())
+  updated_at               DateTime      @updatedAt
+  variants                 PlanVariant[]
+  subscriptions            Subscription[]
+
+  @@map("plans")
+}
+
+enum ValidityType {
+  monthly
+  unlimited
+  assisted
+}
+
+model PlanVariant {
+  id              BigInt         @id @default(autoincrement()) @db.UnsignedBigInt
+  plan_id         BigInt         @db.UnsignedBigInt
+  price           Int
+  duration_months Int
+  verify_contacts Int
+  original_price  Int
+  discount        Int
+  save_money      Int
+  created_at      DateTime       @default(now())
+  updated_at      DateTime       @updatedAt
+  plan            Plan           @relation(fields: [plan_id], references: [id], onDelete: Cascade)
+  subscriptions   Subscription[]
+
+  @@map("plan_variants")
+}
+
+model Subscription {
+  id                BigInt      @id @default(autoincrement()) @db.UnsignedBigInt
+  user_id           BigInt      @db.UnsignedBigInt
+  plan_id           BigInt      @db.UnsignedBigInt
+  plan_variants     BigInt      @db.UnsignedBigInt
+  amount            String?     @db.VarChar(255)
+  starts_at         DateTime    @db.Date
+  ends_at           DateTime?   @db.Date
+  verified_contacts String?     @db.VarChar(255)
+  transaction_id    String?     @db.VarChar(255)
+  payment_status    String      @default("pending") @db.VarChar(255)
+  invoice_number    String      @unique @db.VarChar(255)
+  status            Boolean     @default(false)
+  created_at        DateTime    @default(now())
+  updated_at        DateTime    @updatedAt
+  user              User        @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  plan              Plan        @relation(fields: [plan_id], references: [id], onDelete: Cascade)
+  variant           PlanVariant @relation(fields: [plan_variants], references: [id], onDelete: Cascade)
+
+  @@map("subscriptions")
+}
+
+model TrustBadge {
+  id                BigInt           @id @default(autoincrement()) @db.UnsignedBigInt
+  user_id           BigInt           @unique @db.UnsignedBigInt
+  verification_type String?          @db.VarChar(255)
+  image             String?          @db.VarChar(255)
+  image2            String?          @db.VarChar(255)
+  status            TrustBadgeStatus @default(Pending)
+  created_at        DateTime         @default(now())
+  updated_at        DateTime         @updatedAt
+  user              User             @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("trust_badges")
+}
+
+enum TrustBadgeStatus {
+  Pending
+  Verified
+  Rejected
+}
+
+model ProfileManager {
+  id             BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  user_id        BigInt   @unique @db.UnsignedBigInt
+  profile_image  String?  @db.VarChar(255)
+  profile_image1 String?  @db.VarChar(255)
+  profile_image2 String?  @db.VarChar(255)
+  profile_image3 String?  @db.VarChar(255)
+  profile_image4 String?  @db.VarChar(255)
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+  user           User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("profile_managers")
+}
+
+model PartnerPreference {
+  id                BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  user_id           BigInt   @db.UnsignedBigInt
+  marital_status    String?  @db.VarChar(255)
+  age_from          String?  @db.VarChar(255)
+  age_to            String?  @db.VarChar(255)
+  highest_education String?  @db.VarChar(255)
+  mother_tounge     String?  @db.VarChar(255)
+  sect              String?  @db.VarChar(255)
+  cast              String?  @db.VarChar(255)
+  height_from       String?  @db.VarChar(255)
+  height_to         String?  @db.VarChar(255)
+  occupation        String?  @db.VarChar(255)
+  country           String?  @db.VarChar(255)
+  state             String?  @db.VarChar(255)
+  city              String?  @db.VarChar(255)
+  annual_income     String?  @db.VarChar(255)
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+  user              User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("partner_preferences")
+}
+
+model FamilyInformation {
+  id                BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  user_id           BigInt   @db.UnsignedBigInt
+  family_type       String?  @db.VarChar(255)
+  family_status     String?  @db.VarChar(255)
+  native_state      String?  @db.VarChar(255)
+  native_city       String?  @db.VarChar(255)
+  father_name       String?  @db.VarChar(255)
+  father_occupation String?  @db.VarChar(255)
+  mother_name       String?  @db.VarChar(255)
+  mother_occupation String?  @db.VarChar(255)
+  brother           Int?
+  brother_married   Int?
+  sister            Int?
+  sister_married    Int?
+  about_family      String?  @db.Text
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+  user              User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("family_information")
+}
+
+model ReligiousAndLifeStype {
+  id         BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  user_id    BigInt   @db.UnsignedBigInt
+  religious  String?  @db.VarChar(255)
+  quran      String?  @db.VarChar(255)
+  namaz      String?  @db.VarChar(255)
+  roza       String?  @db.VarChar(255)
+  smoke      String?  @db.VarChar(255)
+  drink      String?  @db.VarChar(255)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("religious_and_life_stypes")
+}
+
+model Faq {
+  id         BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  question   String   @db.VarChar(255)
+  answer     String   @db.Text
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@map("faqs")
+}
+
+model Blog {
+  id               BigInt        @id @default(autoincrement()) @db.UnsignedBigInt
+  title            String        @db.VarChar(255)
+  slug             String        @db.VarChar(255)
+  content          String        @db.Text
+  tags             String?       @db.VarChar(255)
+  image            String?       @db.VarChar(255)
+  blog_category_id BigInt        @db.UnsignedBigInt
+  created_at       DateTime      @default(now())
+  updated_at       DateTime      @updatedAt
+  category         BlogCategory  @relation(fields: [blog_category_id], references: [id], onDelete: Cascade)
+
+  @@map("blogs")
+}
+
+model BlogCategory {
+  id            BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  category_name String   @db.VarChar(255)
+  slug          String   @db.VarChar(255)
+  image         String?  @db.VarChar(255)
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+  blogs         Blog[]
+
+  @@map("blog_categories")
+}
+
+model Story {
+  id          BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  title       String?  @db.VarChar(255)
+  client_name String?  @db.VarChar(255)
+  review      String?  @db.LongText
+  rating      Int?
+  image       String?  @db.VarChar(255)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  @@map("stories")
+}
+
+model PrivacyPolicy {
+  id         BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  title      String   @db.VarChar(255)
+  content    String?  @db.LongText
+  type       String?  @db.VarChar(255)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@map("privacy_policies")
+}
+
+model Counter {
+  id           BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  no_of_members String? @db.VarChar(255)
+  stories      String?  @db.VarChar(255)
+  total_cities String?  @db.VarChar(255)
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  @@map("counters")
+}
+
+model ContactEnquiry {
+  id         BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  name       String?  @db.VarChar(255)
+  email      String?  @db.VarChar(255)
+  phone      String?  @db.VarChar(255)
+  message    String?  @db.Text
+  status     String?  @db.VarChar(255)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@map("contact_enquiries")
+}
+
+model RequestACall {
+  id         BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  user_id    BigInt?  @db.UnsignedBigInt
+  phone      String?  @db.VarChar(255)
+  alt_phone  String?  @db.VarChar(255)
+  status     String?  @db.VarChar(255)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@map("request_a_calls")
+}
+
+model AdminMessage {
+  id          BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  sender_id   BigInt    @db.UnsignedBigInt
+  receiver_id BigInt    @db.UnsignedBigInt
+  message     String    @db.Text
+  read_at     DateTime?
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+
+  @@map("admin_messages")
+}
