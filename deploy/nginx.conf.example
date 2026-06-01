@@ -1,9 +1,25 @@
 # Nginx site config for KVM Hostinger
 # Copy to: /etc/nginx/sites-available/trulynikah-api
+# Enable: sudo ln -s /etc/nginx/sites-available/trulynikah-api /etc/nginx/sites-enabled/
+#
+# IMPORTANT: Do NOT expose port 4000 publicly. Use this proxy on 443 instead.
+# Browsers force HTTPS on *.trulynikah.com (HSTS) — http://api.trulynikah.com:4000 will fail.
 
 server {
     listen 80;
     server_name api.trulynikah.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name api.trulynikah.com;
+
+    # Certbot paths (after: sudo certbot --nginx -d api.trulynikah.com)
+    ssl_certificate     /etc/letsencrypt/live/api.trulynikah.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/api.trulynikah.com/privkey.pem;
+    include             /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam         /etc/letsencrypt/ssl-dhparams.pem;
 
     client_max_body_size 10M;
 
@@ -21,5 +37,9 @@ server {
     }
 }
 
-# After SSL:
-# sudo certbot --nginx -d api.trulynikah.com
+# .env on server:
+# APP_URL=https://api.trulynikah.com
+# PORT=4000
+# NODE_ENV=production
+#
+# Swagger: https://api.trulynikah.com/api-docs  (NOT :4000)
