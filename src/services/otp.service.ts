@@ -34,6 +34,11 @@ export async function sendOtpSms(mobile: string, otp: number): Promise<boolean> 
 }
 
 export async function createAndSendOtp(userId: bigint, mobile: string): Promise<boolean> {
+  return createAndSendOtpForMobile(mobile, userId);
+}
+
+/** Send OTP — userId optional (null = mobile not registered yet) */
+export async function createAndSendOtpForMobile(mobile: string, userId?: bigint): Promise<boolean> {
   const otp = Math.floor(100000 + Math.random() * 900000);
   const sent = await sendOtpSms(mobile, otp);
   if (!sent) return false;
@@ -42,7 +47,7 @@ export async function createAndSendOtp(userId: bigint, mobile: string): Promise<
 
   await prisma.otp.create({
     data: {
-      user_id: userId,
+      user_id: userId ?? null,
       mobile,
       otp: otp.toString(),
       expires_at: expiresAt,
@@ -67,6 +72,28 @@ export async function verifyOtpForUser(userId: bigint, mobile: string, otp: stri
   ]);
 
   return { ok: true as const };
+}
+
+/** Verify OTP by mobile only (mobile app entry — new or existing user) */
+export async function verifyMobileOtp(mobile: string, otp: string) {
+  const record = await prisma.otp.findFirst({
+    where: { mobile, otp, is_used: false },
+    orderBy: { created_at: 'desc' },
+  });
+
+  if (!record) return { ok: false as const, reason: 'Invalid OTP' };
+  if (new Date() > record.expires_at) return { ok: false as const, reason: 'OTP expired' };
+
+  await prisma.otp.update({ where: { id: record.id }, data: { is_used: true } });
+
+  if (record.user_id) {
+    await prisma.user.update({
+      where: { id: record.user_id },
+      data: { phone_verified: true },
+    });
+  }
+
+  return { ok: true as const, userId: record.user_id };
 }
 
 export async function canResendOtp(mobile: string): Promise<{ allowed: boolean; retryAfter?: number }> {

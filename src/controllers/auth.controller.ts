@@ -5,8 +5,9 @@ import {
   AUTH_CHECK_FIELDS,
   AUTH_INTERNAL_TOKEN_FIELDS,
   AUTH_LOGIN_FIELDS,
-  AUTH_LOGIN_OTP_SEND_FIELDS,
   AUTH_LOGIN_OTP_VERIFY_FIELDS,
+  AUTH_MOBILE_OTP_SEND_FIELDS,
+  AUTH_MOBILE_OTP_VERIFY_FIELDS,
   AUTH_OTP_FIELDS,
   AUTH_REGISTER_FIELDS,
   PROFILE_STEP1_FIELDS,
@@ -24,6 +25,8 @@ import {
   saveProfileStep1,
   saveProfileStep2,
   sendLoginOtp,
+  sendMobileAuthOtp,
+  verifyMobileAuthOtp,
 } from '../services/auth.service';
 import { createAndSendOtp, verifyOtpForUser, canResendOtp } from '../services/otp.service';
 import { getProfileCompletion, isProfileComplete } from '../utils/helpers';
@@ -72,22 +75,60 @@ export const login = [
 
 /** Step 1: send OTP to registered mobile */
 export const sendLoginOtpHandler = [
-  validateBody([...AUTH_LOGIN_OTP_SEND_FIELDS], [V.phone10('contact_number')]),
+  validateBody([...AUTH_MOBILE_OTP_SEND_FIELDS], [V.phone10('contact_number')]),
   asyncHandler(async (req, res) => {
-    await sendLoginOtp(req.body.contact_number);
-    return sendSuccess(res, 'OTP sent to your mobile number', {
-      contact_number: req.body.contact_number,
-      nextStep: 'verify_otp',
-    });
+    const data = await sendMobileAuthOtp(req.body.contact_number);
+    return sendSuccess(res, 'OTP sent to your mobile number', data);
   }),
 ];
 
 /** Step 2: verify OTP and login */
 export const verifyLoginOtp = [
-  validateBody([...AUTH_LOGIN_OTP_VERIFY_FIELDS], [V.phone10('contact_number'), V.otp()]),
+  validateBody([...AUTH_MOBILE_OTP_VERIFY_FIELDS], [V.phone10('contact_number'), V.otp()]),
   asyncHandler(async (req, res) => {
-    const result = await loginWithOtp(req.body.contact_number, req.body.otp);
-    return sendSuccess(res, 'Login successful', buildLoginPayload(result.user, result.token));
+    const result = await verifyMobileAuthOtp(req.body.contact_number, req.body.otp);
+    if (!result.accountExists) {
+      throw AppError.badRequest('No account with this mobile. Use POST /auth/mobile/verify-otp.', {
+        contact_number: ['Use /auth/mobile/verify-otp for new and existing users'],
+      });
+    }
+    return sendSuccess(res, 'Login successful', buildLoginPayload(result.user!, result.token));
+  }),
+];
+
+/** Mobile app — step 1: send OTP (new + existing user, same response) */
+export const sendMobileAuthOtpHandler = [
+  validateBody([...AUTH_MOBILE_OTP_SEND_FIELDS], [V.phone10('contact_number')]),
+  asyncHandler(async (req, res) => {
+    const data = await sendMobileAuthOtp(req.body.contact_number);
+    return sendSuccess(res, 'OTP sent to your mobile number', data);
+  }),
+];
+
+/** Mobile app — step 2: verify OTP, then accountExists + nextStep for navigation */
+export const verifyMobileAuthOtpHandler = [
+  validateBody([...AUTH_MOBILE_OTP_VERIFY_FIELDS], [V.phone10('contact_number'), V.otp()]),
+  asyncHandler(async (req, res) => {
+    const result = await verifyMobileAuthOtp(req.body.contact_number, req.body.otp);
+
+    if (!result.accountExists) {
+      return sendSuccess(res, 'OTP verified — new user', {
+        accountExists: false,
+        accountStatus: 'new',
+        nextStep: 'register',
+        contact_number: result.contact_number,
+        phoneVerified: result.phoneVerified,
+      });
+    }
+
+    return sendSuccess(res, 'OTP verified — existing user', {
+      accountExists: true,
+      accountStatus: 'existing',
+      nextStep: result.nextStep,
+      contact_number: result.contact_number,
+      phoneVerified: result.phoneVerified,
+      ...buildLoginPayload(result.user!, result.token),
+    });
   }),
 ];
 

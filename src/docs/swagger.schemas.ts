@@ -80,6 +80,30 @@ export const swaggerSchemas: Record<string, OpenAPIV3.SchemaObject> = {
     },
     description: 'Step 2 of mobile OTP login — returns JWT on success',
   },
+  MobileAuthVerifyResponse: {
+    type: 'object',
+    description: 'After OTP verify — use accountExists and nextStep to navigate in the app',
+    properties: {
+      accountExists: { type: 'boolean', example: true, description: 'true = login, false = go to registration' },
+      accountStatus: {
+        type: 'string',
+        enum: ['existing', 'new'],
+        example: 'existing',
+        description: 'existing = registered user, new = not registered yet',
+      },
+      nextStep: {
+        type: 'string',
+        enum: ['register', 'dashboard', 'complete_profile'],
+        example: 'dashboard',
+        description: 'register if new; dashboard or complete_profile if existing',
+      },
+      contact_number: { type: 'string', example: '9876543210' },
+      phoneVerified: { type: 'boolean', example: true, description: 'Mobile ownership confirmed by OTP' },
+      token: { type: 'string', description: 'JWT — only when accountExists is true' },
+      user: { type: 'object', description: 'User profile — only when accountExists is true' },
+      onboarding: { type: 'object', description: 'Onboarding flags — only when accountExists is true' },
+    },
+  },
   LoginResponse: {
     type: 'object',
     description: 'Returned by email login and mobile OTP login',

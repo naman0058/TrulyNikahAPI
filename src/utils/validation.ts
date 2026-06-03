@@ -168,8 +168,10 @@ export const ALLOWED_PARTNER_FIELDS = [
 
 export const AUTH_REGISTER_FIELDS = ['email', 'behalf', 'contact_number', 'password', 'fid'] as const;
 export const AUTH_LOGIN_FIELDS = ['email', 'password'] as const;
-export const AUTH_LOGIN_OTP_SEND_FIELDS = ['contact_number'] as const;
-export const AUTH_LOGIN_OTP_VERIFY_FIELDS = ['contact_number', 'otp'] as const;
+export const AUTH_MOBILE_OTP_SEND_FIELDS = ['contact_number'] as const;
+export const AUTH_MOBILE_OTP_VERIFY_FIELDS = ['contact_number', 'otp'] as const;
+export const AUTH_LOGIN_OTP_SEND_FIELDS = AUTH_MOBILE_OTP_SEND_FIELDS;
+export const AUTH_LOGIN_OTP_VERIFY_FIELDS = AUTH_MOBILE_OTP_VERIFY_FIELDS;
 export const AUTH_CHECK_FIELDS = ['email', 'contact_number'] as const;
 export const AUTH_CHANGE_PASSWORD_FIELDS = ['password', 'password_confirmation'] as const;
 export const AUTH_OTP_FIELDS = ['otp'] as const;

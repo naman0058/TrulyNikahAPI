@@ -140,10 +140,29 @@ export function buildSwaggerPaths(): OpenAPIV3.PathsObject {
       }),
     },
     '/auth/login/otp/verify': {
-      post: opPost('Auth', 'Verify OTP and login with mobile', {
+      post: opPost('Auth', 'Verify OTP and login with mobile (existing users only)', {
         body: S('MobileLoginOtpVerifyRequest'),
-        detail: 'Passwordless login step 2. Marks phone as verified and returns the same payload as email login.',
+        detail: 'Legacy login OTP. Prefer `POST /auth/mobile/verify-otp` which supports new + existing users.',
         desc: 'Login successful — JWT returned',
+      }),
+    },
+    '/auth/mobile/send-otp': {
+      post: opPost('Auth', 'Mobile app — send OTP (new or existing user)', {
+        body: S('MobileLoginOtpSendRequest'),
+        detail:
+          '**Recommended for mobile apps.** Same response whether the number is registered or not (no account leak). ' +
+          'After OTP is entered, call `/auth/mobile/verify-otp`.',
+        desc: 'OTP sent',
+      }),
+    },
+    '/auth/mobile/verify-otp': {
+      post: opPost('Auth', 'Mobile app — verify OTP and get account status', {
+        body: S('MobileLoginOtpVerifyRequest'),
+        detail:
+          '**Recommended for mobile apps.** Returns `accountExists` and `nextStep`:\n' +
+          '- `accountExists: false` → `nextStep: register` (new user)\n' +
+          '- `accountExists: true` → `token`, `user`, `nextStep: dashboard` or `complete_profile`',
+        desc: 'OTP verified — see accountExists in response',
       }),
     },
     '/auth/logout': { post: opPost('Auth', 'Logout', { security: bearer, noBody: true }) },

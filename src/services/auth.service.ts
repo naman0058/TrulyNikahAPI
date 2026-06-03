@@ -1,8 +1,8 @@
 import prisma from '../lib/prisma';
 import { hashPassword, verifyPassword } from '../lib/bcrypt';
 import { signUserToken } from '../lib/jwt';
-import { createAndSendOtp, verifyOtpForUser, canResendOtp } from './otp.service';
-import { calculateAge, generateMemberId } from '../utils/helpers';
+import { createAndSendOtp, createAndSendOtpForMobile, verifyOtpForUser, verifyMobileOtp, canResendOtp } from './otp.service';
+import { calculateAge, generateMemberId, isProfileComplete } from '../utils/helpers';
 import { AppError, ErrorCode } from '../utils/errors';
 
 export async function registerUser(input: {
@@ -70,37 +70,61 @@ function assertUserCanLogin(user: { status: string }) {
   }
 }
 
-/** Send OTP to registered mobile for passwordless login */
-export async function sendLoginOtp(contact_number: string) {
+/** Mobile app: send OTP (same response for new + existing — no account hint) */
+export async function sendMobileAuthOtp(contact_number: string) {
   const user = await prisma.user.findFirst({ where: { contact_number } });
-  if (!user) {
-    throw AppError.badRequest('No account found with this mobile number', {
-      contact_number: ['Mobile number is not registered'],
-    });
-  }
-
-  assertUserCanLogin(user);
+  if (user) assertUserCanLogin(user);
 
   const cooldown = await canResendOtp(contact_number);
   if (!cooldown.allowed) {
     throw AppError.rateLimit('OTP can be sent only after cooldown period', cooldown.retryAfter);
   }
 
-  const sent = await createAndSendOtp(user.id, contact_number);
+  const sent = await createAndSendOtpForMobile(contact_number, user?.id);
   if (!sent) throw AppError.internal('Failed to send OTP. Please try again.');
 
-  return { userId: user.id };
+  return { contact_number, nextStep: 'verify_otp' as const };
 }
 
-/** Verify OTP and issue JWT (mobile login) */
-export async function loginWithOtp(contact_number: string, otp: string) {
+export type MobileAuthVerifyResult =
+  | {
+      accountExists: true;
+      accountStatus: 'existing';
+      nextStep: 'dashboard' | 'complete_profile';
+      contact_number: string;
+      phoneVerified: boolean;
+      token: string;
+      user: Awaited<ReturnType<typeof prisma.user.findUnique>>;
+    }
+  | {
+      accountExists: false;
+      accountStatus: 'new';
+      nextStep: 'register';
+      contact_number: string;
+      phoneVerified: boolean;
+    };
+
+/** Mobile app: verify OTP — then return whether account exists */
+export async function verifyMobileAuthOtp(
+  contact_number: string,
+  otp: string
+): Promise<MobileAuthVerifyResult> {
+  const otpResult = await verifyMobileOtp(contact_number, otp);
+  if (!otpResult.ok) throw AppError.otpError(otpResult.reason);
+
   const user = await prisma.user.findFirst({ where: { contact_number } });
-  if (!user) throw AppError.otpError('Invalid OTP');
+
+  if (!user) {
+    return {
+      accountExists: false,
+      accountStatus: 'new',
+      nextStep: 'register',
+      contact_number,
+      phoneVerified: true,
+    };
+  }
 
   assertUserCanLogin(user);
-
-  const result = await verifyOtpForUser(user.id, contact_number, otp);
-  if (!result.ok) throw AppError.otpError(result.reason);
 
   await prisma.user.update({
     where: { id: user.id },
@@ -111,7 +135,33 @@ export async function loginWithOtp(contact_number: string, otp: string) {
   if (!updated) throw AppError.notFound('User not found');
 
   const token = signUserToken(updated.id, updated.email);
-  return { user: updated, token };
+  const profileComplete = isProfileComplete(updated);
+
+  return {
+    accountExists: true,
+    accountStatus: 'existing',
+    nextStep: profileComplete ? 'dashboard' : 'complete_profile',
+    contact_number,
+    phoneVerified: updated.phone_verified,
+    token,
+    user: updated,
+  };
+}
+
+/** Send OTP to registered mobile for passwordless login */
+export async function sendLoginOtp(contact_number: string) {
+  return sendMobileAuthOtp(contact_number);
+}
+
+/** Verify OTP and issue JWT (mobile login — existing users only) */
+export async function loginWithOtp(contact_number: string, otp: string) {
+  const result = await verifyMobileAuthOtp(contact_number, otp);
+  if (!result.accountExists) {
+    throw AppError.badRequest('No account with this mobile. Please register.', {
+      contact_number: ['Account does not exist — use mobile verify flow or register'],
+    });
+  }
+  return { user: result.user!, token: result.token };
 }
 
 export async function issueInternalToken(userId: bigint) {

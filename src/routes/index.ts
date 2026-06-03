@@ -23,8 +23,8 @@ router.get('/', (_req, res) => {
         'GET /counters',
         'POST /auth/register',
         'POST /auth/login',
-        'POST /auth/login/otp/send',
-        'POST /auth/login/otp/verify',
+        'POST /auth/mobile/send-otp',
+        'POST /auth/mobile/verify-otp',
       ],
       authenticated: [
         'GET /auth/me',
