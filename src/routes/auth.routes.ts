@@ -6,6 +6,8 @@ const router = Router();
 
 router.post('/register', auth.register);
 router.post('/login', auth.login);
+router.post('/login/otp/send', auth.sendLoginOtpHandler);
+router.post('/login/otp/verify', auth.verifyLoginOtp);
 router.post('/logout', auth.logout);
 router.post('/check-availability', auth.checkEmail);
 router.post('/internal/token', auth.internalToken);

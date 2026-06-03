@@ -56,6 +56,46 @@ export const swaggerSchemas: Record<string, OpenAPIV3.SchemaObject> = {
       email: { type: 'string', format: 'email', example: 'user@example.com' },
       password: { type: 'string', example: 'password123' },
     },
+    description: 'Email and password login',
+  },
+  MobileLoginOtpSendRequest: {
+    type: 'object',
+    required: ['contact_number'],
+    properties: {
+      contact_number: {
+        type: 'string',
+        pattern: '^\\d{10}$',
+        example: '9876543210',
+        description: '10-digit mobile number registered on the account',
+      },
+    },
+    description: 'Step 1 of mobile OTP login — sends SMS OTP',
+  },
+  MobileLoginOtpVerifyRequest: {
+    type: 'object',
+    required: ['contact_number', 'otp'],
+    properties: {
+      contact_number: { type: 'string', pattern: '^\\d{10}$', example: '9876543210' },
+      otp: { type: 'string', pattern: '^\\d{6}$', example: '123456', description: '6-digit OTP from SMS' },
+    },
+    description: 'Step 2 of mobile OTP login — returns JWT on success',
+  },
+  LoginResponse: {
+    type: 'object',
+    description: 'Returned by email login and mobile OTP login',
+    properties: {
+      token: { type: 'string', description: 'JWT Bearer token' },
+      user: { type: 'object' },
+      onboarding: {
+        type: 'object',
+        properties: {
+          phoneVerified: { type: 'boolean' },
+          profileComplete: { type: 'boolean' },
+          status: userStatus,
+          completion: { type: 'object' },
+        },
+      },
+    },
   },
   CheckAvailabilityRequest: {
     type: 'object',
@@ -82,6 +122,7 @@ export const swaggerSchemas: Record<string, OpenAPIV3.SchemaObject> = {
     type: 'object',
     required: ['otp'],
     properties: { otp: { type: 'string', pattern: '^\\d{6}$', example: '123456' } },
+    description: 'Verify OTP after registration (requires Bearer token from register)',
   },
   ProfileStep1Request: {
     type: 'object',

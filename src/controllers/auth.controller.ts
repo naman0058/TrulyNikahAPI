@@ -5,6 +5,8 @@ import {
   AUTH_CHECK_FIELDS,
   AUTH_INTERNAL_TOKEN_FIELDS,
   AUTH_LOGIN_FIELDS,
+  AUTH_LOGIN_OTP_SEND_FIELDS,
+  AUTH_LOGIN_OTP_VERIFY_FIELDS,
   AUTH_OTP_FIELDS,
   AUTH_REGISTER_FIELDS,
   PROFILE_STEP1_FIELDS,
@@ -16,10 +18,12 @@ import {
   deleteUserAccount,
   issueInternalToken,
   loginUser,
+  loginWithOtp,
   registerUser,
   sanitizeUser,
   saveProfileStep1,
   saveProfileStep2,
+  sendLoginOtp,
 } from '../services/auth.service';
 import { createAndSendOtp, verifyOtpForUser, canResendOtp } from '../services/otp.service';
 import { getProfileCompletion, isProfileComplete } from '../utils/helpers';
@@ -62,17 +66,28 @@ export const login = [
   validateBody([...AUTH_LOGIN_FIELDS], [V.email(), V.nonEmptyString('password', 'password')]),
   asyncHandler(async (req, res) => {
     const result = await loginUser(req.body.email, req.body.password);
-    const user = result.user;
-    return sendSuccess(res, 'Login successful', {
-      token: result.token,
-      user: serialize(sanitizeUser(user as never)),
-      onboarding: {
-        phoneVerified: user.phone_verified,
-        profileComplete: isProfileComplete(user),
-        status: user.status,
-        completion: getProfileCompletion(user as never),
-      },
+    return sendSuccess(res, 'Login successful', buildLoginPayload(result.user, result.token));
+  }),
+];
+
+/** Step 1: send OTP to registered mobile */
+export const sendLoginOtpHandler = [
+  validateBody([...AUTH_LOGIN_OTP_SEND_FIELDS], [V.phone10('contact_number')]),
+  asyncHandler(async (req, res) => {
+    await sendLoginOtp(req.body.contact_number);
+    return sendSuccess(res, 'OTP sent to your mobile number', {
+      contact_number: req.body.contact_number,
+      nextStep: 'verify_otp',
     });
+  }),
+];
+
+/** Step 2: verify OTP and login */
+export const verifyLoginOtp = [
+  validateBody([...AUTH_LOGIN_OTP_VERIFY_FIELDS], [V.phone10('contact_number'), V.otp()]),
+  asyncHandler(async (req, res) => {
+    const result = await loginWithOtp(req.body.contact_number, req.body.otp);
+    return sendSuccess(res, 'Login successful', buildLoginPayload(result.user, result.token));
   }),
 ];
 
@@ -220,6 +235,22 @@ export const profileStep2 = [
     });
   }),
 ];
+
+function buildLoginPayload(
+  user: Parameters<typeof sanitizeUser>[0],
+  token: string
+) {
+  return {
+    token,
+    user: serialize(sanitizeUser(user as never)),
+    onboarding: {
+      phoneVerified: user.phone_verified,
+      profileComplete: isProfileComplete(user as never),
+      status: user.status,
+      completion: getProfileCompletion(user as never),
+    },
+  };
+}
 
 /** Server-to-server token for Laravel session bridge */
 export const internalToken = [

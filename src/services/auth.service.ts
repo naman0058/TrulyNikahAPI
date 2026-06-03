@@ -1,7 +1,7 @@
 import prisma from '../lib/prisma';
 import { hashPassword, verifyPassword } from '../lib/bcrypt';
 import { signUserToken } from '../lib/jwt';
-import { createAndSendOtp } from './otp.service';
+import { createAndSendOtp, verifyOtpForUser, canResendOtp } from './otp.service';
 import { calculateAge, generateMemberId } from '../utils/helpers';
 import { AppError, ErrorCode } from '../utils/errors';
 
@@ -53,9 +53,7 @@ export async function loginUser(email: string, password: string) {
   const valid = await verifyPassword(password, user.password);
   if (!valid) throw AppError.unauthorized('Invalid credentials', ErrorCode.AUTH_INVALID);
 
-  if (user.status === 'block' || user.status === 'deleted') {
-    throw AppError.forbidden('Your account is blocked or deleted', ErrorCode.ACCOUNT_BLOCKED);
-  }
+  assertUserCanLogin(user);
 
   await prisma.user.update({
     where: { id: user.id },
@@ -64,6 +62,56 @@ export async function loginUser(email: string, password: string) {
 
   const token = signUserToken(user.id, user.email);
   return { user, token };
+}
+
+function assertUserCanLogin(user: { status: string }) {
+  if (user.status === 'block' || user.status === 'deleted') {
+    throw AppError.forbidden('Your account is blocked or deleted', ErrorCode.ACCOUNT_BLOCKED);
+  }
+}
+
+/** Send OTP to registered mobile for passwordless login */
+export async function sendLoginOtp(contact_number: string) {
+  const user = await prisma.user.findFirst({ where: { contact_number } });
+  if (!user) {
+    throw AppError.badRequest('No account found with this mobile number', {
+      contact_number: ['Mobile number is not registered'],
+    });
+  }
+
+  assertUserCanLogin(user);
+
+  const cooldown = await canResendOtp(contact_number);
+  if (!cooldown.allowed) {
+    throw AppError.rateLimit('OTP can be sent only after cooldown period', cooldown.retryAfter);
+  }
+
+  const sent = await createAndSendOtp(user.id, contact_number);
+  if (!sent) throw AppError.internal('Failed to send OTP. Please try again.');
+
+  return { userId: user.id };
+}
+
+/** Verify OTP and issue JWT (mobile login) */
+export async function loginWithOtp(contact_number: string, otp: string) {
+  const user = await prisma.user.findFirst({ where: { contact_number } });
+  if (!user) throw AppError.otpError('Invalid OTP');
+
+  assertUserCanLogin(user);
+
+  const result = await verifyOtpForUser(user.id, contact_number, otp);
+  if (!result.ok) throw AppError.otpError(result.reason);
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { last_login_at: new Date() },
+  });
+
+  const updated = await prisma.user.findUnique({ where: { id: user.id } });
+  if (!updated) throw AppError.notFound('User not found');
+
+  const token = signUserToken(updated.id, updated.email);
+  return { user: updated, token };
 }
 
 export async function issueInternalToken(userId: bigint) {

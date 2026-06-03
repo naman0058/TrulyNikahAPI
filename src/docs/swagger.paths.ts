@@ -81,6 +81,7 @@ function opPost(tag: string, summary: string, opts?: OpOpts): OpenAPIV3.Operatio
   const operation: OpenAPIV3.OperationObject = {
     tags: [tag],
     summary,
+    description: opts?.detail,
     security: opts?.security,
     parameters: buildParams(opts),
     responses: { '200': jsonOk(opts?.desc ?? summary), '201': jsonOk('Created'), ...jsonErr() },
@@ -123,7 +124,28 @@ function opDelete(tag: string, summary: string, opts?: OpOpts): OpenAPIV3.Operat
 export function buildSwaggerPaths(): OpenAPIV3.PathsObject {
   return {
     '/auth/register': { post: opPost('Auth', 'Register new member', { body: S('RegisterRequest'), desc: 'Registered; OTP sent' }) },
-    '/auth/login': { post: opPost('Auth', 'Login with email and password', { body: S('LoginRequest'), desc: 'JWT token returned' }) },
+    '/auth/login': {
+      post: opPost('Auth', 'Login with email and password', {
+        body: S('LoginRequest'),
+        detail: 'Returns JWT and user profile. Alternative: mobile OTP login via `/auth/login/otp/send` and `/auth/login/otp/verify`.',
+        desc: 'JWT token returned',
+      }),
+    },
+    '/auth/login/otp/send': {
+      post: opPost('Auth', 'Send OTP for mobile login', {
+        body: S('MobileLoginOtpSendRequest'),
+        detail:
+          'Passwordless login step 1. Mobile must already be registered. Respects OTP cooldown (see OTP_RESEND_COOLDOWN_SECONDS).',
+        desc: 'OTP sent to mobile',
+      }),
+    },
+    '/auth/login/otp/verify': {
+      post: opPost('Auth', 'Verify OTP and login with mobile', {
+        body: S('MobileLoginOtpVerifyRequest'),
+        detail: 'Passwordless login step 2. Marks phone as verified and returns the same payload as email login.',
+        desc: 'Login successful — JWT returned',
+      }),
+    },
     '/auth/logout': { post: opPost('Auth', 'Logout', { security: bearer, noBody: true }) },
     '/auth/me': { get: opGet('Auth', 'Get current user', { security: bearer }) },
     '/auth/check-availability': { post: opPost('Auth', 'Check email and phone availability', { body: S('CheckAvailabilityRequest') }) },
