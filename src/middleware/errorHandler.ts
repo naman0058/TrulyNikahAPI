@@ -77,7 +77,11 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
   if (err instanceof Prisma.PrismaClientKnownRequestError) {
     const appErr = handlePrismaError(err);
     if (config.env === 'development') console.error('[Prisma]', err.code, err.meta);
-    return sendError(res, appErr.message, appErr.statusCode, { code: appErr.code, errors: appErr.errors });
+    return sendError(res, appErr.message, appErr.statusCode, {
+      code: appErr.code,
+      errors: appErr.errors,
+      meta: { prismaCode: err.code },
+    });
   }
   if (err instanceof Prisma.PrismaClientValidationError) {
     return sendError(res, 'Invalid database query', 400, { code: ErrorCode.DATABASE_ERROR });

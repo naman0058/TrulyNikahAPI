@@ -10,6 +10,9 @@ import config from './config';
 import routes from './routes';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import { swaggerSpec, swaggerUiOptions } from './docs/swagger';
+import { API_BUILD_ID } from './constants/build';
+import prisma from './lib/prisma';
+import { countStatesForCountry } from './services/location.service';
 
 /** Swagger UI: relax security headers that break on HTTP / non-localhost origins. */
 const swaggerHelmet = helmet({
@@ -51,11 +54,23 @@ export function createApp() {
     })
   );
 
-  app.get('/health', (_req, res) => {
+  app.get('/health', async (_req, res) => {
+    let statesForIndia = -1;
+    let dbError: string | undefined;
+    try {
+      statesForIndia = await countStatesForCountry(76);
+    } catch (e) {
+      dbError = e instanceof Error ? e.message.slice(0, 200) : 'db probe failed';
+    }
     res.json({
       success: true,
       message: 'TrulyNikah API is running',
       env: config.env,
+      build: API_BUILD_ID,
+      db: {
+        statesForCountry76: statesForIndia,
+        ...(dbError ? { error: dbError } : {}),
+      },
       timestamp: new Date().toISOString(),
     });
   });

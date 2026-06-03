@@ -15,98 +15,110 @@ function isSchemaMismatchError(err: unknown): boolean {
       msg.includes("doesn't exist") ||
       msg.includes('unknown column') ||
       msg.includes('does not exist') ||
-      msg.includes("table") && msg.includes("doesn't exist")
+      (msg.includes('table') && msg.includes("doesn't exist"))
     );
   }
   return false;
 }
 
-/** States by country — raw SQL first (Laravel-compatible, avoids Prisma schema drift) */
-export async function findStatesByCountryId(countryId: bigint): Promise<StateRow[]> {
-  try {
-    return await findStatesByCountryIdRaw(countryId);
-  } catch (err) {
-    if (!isSchemaMismatchError(err)) throw err;
-    return findStatesByCountryIdPrisma(countryId);
-  }
+function toBigIntRow<T extends { id: bigint | number; name: string }>(r: T): T & { id: bigint } {
+  return { ...r, id: BigInt(r.id) };
 }
 
-async function findStatesByCountryIdRaw(countryId: bigint): Promise<StateRow[]> {
-  const rows = await prisma.$queryRaw<Array<{ id: bigint | number; name: string; country_id: bigint | number }>>`
-    SELECT id, name, country_id FROM states WHERE country_id = ${countryId} ORDER BY name ASC
-  `;
+/** Parameterized raw query (works across Prisma/MySQL versions; avoids BigInt binding issues). */
+async function queryStatesByCountry(countryId: bigint): Promise<StateRow[]> {
+  const rows = await prisma.$queryRawUnsafe<
+    Array<{ id: bigint | number; name: string; country_id: bigint | number }>
+  >(
+    'SELECT id, name, country_id FROM states WHERE country_id = ? ORDER BY name ASC',
+    Number(countryId)
+  );
   return rows.map((r) => ({
-    id: BigInt(r.id),
-    name: r.name,
+    ...toBigIntRow(r),
     country_id: BigInt(r.country_id),
   }));
 }
 
-async function findStatesByCountryIdPrisma(countryId: bigint): Promise<StateRow[]> {
+async function queryCitiesByState(stateId: bigint): Promise<CityRow[]> {
+  const rows = await prisma.$queryRawUnsafe<
+    Array<{ id: bigint | number; name: string; state_id: bigint | number }>
+  >(
+    'SELECT id, name, state_id FROM cities WHERE state_id = ? ORDER BY name ASC',
+    Number(stateId)
+  );
+  return rows.map((r) => ({
+    ...toBigIntRow(r),
+    state_id: BigInt(r.state_id),
+  }));
+}
+
+/** States by country — raw SQL (Laravel-compatible). */
+export async function findStatesByCountryId(countryId: bigint): Promise<StateRow[]> {
   try {
-    return await prisma.state.findMany({
-      where: { country_id: countryId },
-      orderBy: { name: 'asc' },
-      select: { id: true, name: true, country_id: true },
-    });
+    return await queryStatesByCountry(countryId);
   } catch (err) {
-    if (isSchemaMismatchError(err)) {
-      throw AppError.notFound(
-        'States data is not available. Run Laravel migrations and StateSeeder on the database.'
-      );
+    if (!isSchemaMismatchError(err)) throw err;
+    try {
+      return await prisma.state.findMany({
+        where: { country_id: countryId },
+        orderBy: { name: 'asc' },
+        select: { id: true, name: true, country_id: true },
+      });
+    } catch (inner) {
+      if (isSchemaMismatchError(inner)) {
+        throw AppError.notFound(
+          'States table missing or empty. Import deploy/sql/location-setup.sql on this database.'
+        );
+      }
+      throw inner;
     }
-    throw err;
   }
 }
 
 /** Cities by state */
 export async function findCitiesByStateId(stateId: bigint): Promise<CityRow[]> {
   try {
-    return await findCitiesByStateIdRaw(stateId);
+    return await queryCitiesByState(stateId);
   } catch (err) {
     if (!isSchemaMismatchError(err)) throw err;
-    return findCitiesByStateIdPrisma(stateId);
-  }
-}
-
-async function findCitiesByStateIdRaw(stateId: bigint): Promise<CityRow[]> {
-  const rows = await prisma.$queryRaw<Array<{ id: bigint | number; name: string; state_id: bigint | number }>>`
-    SELECT id, name, state_id FROM cities WHERE state_id = ${stateId} ORDER BY name ASC
-  `;
-  return rows.map((r) => ({
-    id: BigInt(r.id),
-    name: r.name,
-    state_id: BigInt(r.state_id),
-  }));
-}
-
-async function findCitiesByStateIdPrisma(stateId: bigint): Promise<CityRow[]> {
-  try {
-    return await prisma.city.findMany({
-      where: { state_id: stateId },
-      orderBy: { name: 'asc' },
-      select: { id: true, name: true, state_id: true },
-    });
-  } catch (err) {
-    if (isSchemaMismatchError(err)) {
-      throw AppError.notFound(
-        'Cities data is not available. Run Laravel migrations and city seeders on the database.'
-      );
+    try {
+      return await prisma.city.findMany({
+        where: { state_id: stateId },
+        orderBy: { name: 'asc' },
+        select: { id: true, name: true, state_id: true },
+      });
+    } catch (inner) {
+      if (isSchemaMismatchError(inner)) {
+        throw AppError.notFound(
+          'Cities table missing or empty. Add city rows for this state in the database.'
+        );
+      }
+      throw inner;
     }
-    throw err;
   }
 }
 
 export async function countryExists(countryId: bigint): Promise<boolean> {
-  const rows = await prisma.$queryRaw<Array<{ id: bigint | number }>>`
-    SELECT id FROM countries WHERE id = ${countryId} LIMIT 1
-  `;
+  const rows = await prisma.$queryRawUnsafe<Array<{ id: bigint | number }>>(
+    'SELECT id FROM countries WHERE id = ? LIMIT 1',
+    Number(countryId)
+  );
   return rows.length > 0;
 }
 
 export async function stateExists(stateId: bigint): Promise<boolean> {
-  const rows = await prisma.$queryRaw<Array<{ id: bigint | number }>>`
-    SELECT id FROM states WHERE id = ${stateId} LIMIT 1
-  `;
+  const rows = await prisma.$queryRawUnsafe<Array<{ id: bigint | number }>>(
+    'SELECT id FROM states WHERE id = ? LIMIT 1',
+    Number(stateId)
+  );
   return rows.length > 0;
+}
+
+/** Used by GET /health to verify DB + deploy. */
+export async function countStatesForCountry(countryId: number): Promise<number> {
+  const rows = await prisma.$queryRawUnsafe<Array<{ c: bigint | number }>>(
+    'SELECT COUNT(*) AS c FROM states WHERE country_id = ?',
+    countryId
+  );
+  return Number(rows[0]?.c ?? 0);
 }

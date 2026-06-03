@@ -68,12 +68,20 @@ npm run build
 pm2 restart trulynikah-api
 ```
 
-If `state` / `city` still fail, on the server DB run Laravel migrations and seeders:
+If `state` / `city` still fail, ensure `countries`, `states`, and `cities` tables exist and India has states. Either Laravel:
 
 ```bash
 php artisan migrate
 php artisan db:seed --class=StateSeeder
 ```
+
+Or run SQL directly (phpMyAdmin / `mysql` CLI) — no PHP required:
+
+```bash
+mysql -u USER -p DATABASE_NAME < deploy/sql/location-setup.sql
+```
+
+File: `deploy/sql/location-setup.sql` (creates tables if missing, inserts India + 28 states). Check India's id: `SELECT id FROM countries WHERE name = 'India';` then call `GET /api/v1/state/{that_id}` (often `76` if countries were seeded in default order).
 
 Browser: open `https://api.trulynikah.com/api-docs` (not `:4000`).
 
