@@ -140,8 +140,8 @@ model State {
   id         BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
   name       String   @db.VarChar(255)
   country_id BigInt   @db.UnsignedBigInt
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
+  created_at DateTime? @default(now())
+  updated_at DateTime? @updatedAt
   country    Country  @relation(fields: [country_id], references: [id])
   cities     City[]
 
@@ -152,8 +152,8 @@ model City {
   id         BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
   name       String   @db.VarChar(255)
   state_id   BigInt   @db.UnsignedBigInt
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
+  created_at DateTime? @default(now())
+  updated_at DateTime? @updatedAt
   state      State    @relation(fields: [state_id], references: [id])
 
   @@map("cities")

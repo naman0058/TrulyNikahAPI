@@ -4,6 +4,12 @@ import { sendSuccess, serialize, paginationMeta } from '../utils/response';
 import { PUBLIC_USER_SELECT, maskEmail, maskPhone, routeParam, parseBigIntId } from '../utils/helpers';
 import { AppError } from '../utils/errors';
 import { getBestMatches, getNewProfiles } from '../services/discovery.service';
+import {
+  countryExists,
+  findCitiesByStateId,
+  findStatesByCountryId,
+  stateExists,
+} from '../services/location.service';
 import { body, query } from 'express-validator';
 import { V, CONTACT_ENQUIRY_FIELDS, SEARCH_BODY_FIELDS } from '../utils/validation';
 
@@ -16,13 +22,9 @@ export const getStates = [
   validate([V.positiveIntParam('countryId', 'countryId')]),
   asyncHandler(async (req, res) => {
     const countryId = parseBigIntId(req.params.countryId, 'countryId');
-  const country = await prisma.country.findUnique({ where: { id: countryId } });
-  if (!country) throw AppError.notFound('Country not found');
+    if (!(await countryExists(countryId))) throw AppError.notFound('Country not found');
 
-  const states = await prisma.state.findMany({
-    where: { country_id: countryId },
-    orderBy: { name: 'asc' },
-  });
+    const states = await findStatesByCountryId(countryId);
     return sendSuccess(res, 'States fetched', serialize(states));
   }),
 ];
@@ -31,13 +33,9 @@ export const getCities = [
   validate([V.positiveIntParam('stateId', 'stateId')]),
   asyncHandler(async (req, res) => {
     const stateId = parseBigIntId(req.params.stateId, 'stateId');
-  const state = await prisma.state.findUnique({ where: { id: stateId } });
-  if (!state) throw AppError.notFound('State not found');
+    if (!(await stateExists(stateId))) throw AppError.notFound('State not found');
 
-  const cities = await prisma.city.findMany({
-    where: { state_id: stateId },
-    orderBy: { name: 'asc' },
-  });
+    const cities = await findCitiesByStateId(stateId);
     return sendSuccess(res, 'Cities fetched', serialize(cities));
   }),
 ];
@@ -97,10 +95,7 @@ export const getStatesLegacy = [
   validate([V.positiveIntParam('countryId', 'countryId')]),
   asyncHandler(async (req, res) => {
     const countryId = parseBigIntId(req.params.countryId, 'countryId');
-  const states = await prisma.state.findMany({
-    where: { country_id: countryId },
-    orderBy: { name: 'asc' },
-  });
+    const states = await findStatesByCountryId(countryId);
     return res.json(serialize(states));
   }),
 ];
@@ -109,10 +104,7 @@ export const getCitiesLegacy = [
   validate([V.positiveIntParam('stateId', 'stateId')]),
   asyncHandler(async (req, res) => {
     const stateId = parseBigIntId(req.params.stateId, 'stateId');
-  const cities = await prisma.city.findMany({
-    where: { state_id: stateId },
-    orderBy: { name: 'asc' },
-  });
+    const cities = await findCitiesByStateId(stateId);
     return res.json(serialize(cities));
   }),
 ];

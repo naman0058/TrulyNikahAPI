@@ -22,6 +22,10 @@ function handlePrismaError(err: Prisma.PrismaClientKnownRequestError): AppError 
         [target]: [`A record with this ${target} already exists`],
       });
     }
+    case 'P2021':
+      return AppError.notFound('Database table not found. Run Laravel location migrations on the server.');
+    case 'P2022':
+      return AppError.internal('Database column mismatch. Update API or run migrations.');
     case 'P2025':
       return AppError.notFound('Record not found');
     case 'P2003':
@@ -29,7 +33,11 @@ function handlePrismaError(err: Prisma.PrismaClientKnownRequestError): AppError 
     case 'P2014':
       return AppError.badRequest('Invalid relation in request');
     default:
-      return AppError.internal('Database operation failed');
+      return AppError.internal(
+        config.env === 'production'
+          ? 'Database operation failed'
+          : `Database operation failed (${err.code})`
+      );
   }
 }
 

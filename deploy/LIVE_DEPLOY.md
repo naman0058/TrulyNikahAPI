@@ -56,6 +56,23 @@ sudo ufw allow 443
 ```bash
 curl -s https://api.trulynikah.com/health
 curl -s https://api.trulynikah.com/api/v1/
+curl -s https://api.trulynikah.com/api/v1/state/76
+curl -s https://api.trulynikah.com/api/v1/city/1
+```
+
+After code changes (e.g. state/city location fix):
+
+```bash
+cd trulynikah-api
+npm run build
+pm2 restart trulynikah-api
+```
+
+If `state` / `city` still fail, on the server DB run Laravel migrations and seeders:
+
+```bash
+php artisan migrate
+php artisan db:seed --class=StateSeeder
 ```
 
 Browser: open `https://api.trulynikah.com/api-docs` (not `:4000`).
