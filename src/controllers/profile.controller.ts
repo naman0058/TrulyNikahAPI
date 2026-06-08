@@ -1,10 +1,12 @@
 import { AuthRequest, asyncHandler, authenticate, fullUserGuard, validate, validateBody } from '../middleware';
 import { body, param } from 'express-validator';
 import prisma from '../lib/prisma';
-import { sendSuccess, serialize } from '../utils/response';
+import { sendSuccess, serialize, enrichAndSerialize } from '../utils/response';
 import { AppError, ErrorCode } from '../utils/errors';
 import { PUBLIC_USER_SELECT, heightStringToInches, routeParam, getProfileCompletion } from '../utils/helpers';
-import { sanitizeUser } from '../services/auth.service';
+import { enrichUserForClient, enrichSafeUser } from '../services/user-display.service';
+import { upsertPartnerPreference } from '../services/partner-preference.service';
+import { findNotificationsForUser } from '../services/notification.service';
 import { allowedValues, validationMessage } from '../constants/fieldOptions';
 import {
   ALLOWED_FAMILY_FIELDS,
@@ -23,7 +25,7 @@ export const updateBasic = [
       where: { id: req.userId! },
       data: { name: req.body.name, gender: req.body.gender },
     });
-    return sendSuccess(res, 'Basic details updated', serialize(sanitizeUser(user as never)));
+    return sendSuccess(res, 'Basic details updated', serialize(await enrichUserForClient(user as never)));
   }),
 ];
 
@@ -50,7 +52,7 @@ export const updatePersonal = [
         any_disability: req.body.any_disability,
       },
     });
-    return sendSuccess(res, 'Personal details updated', serialize(sanitizeUser(user as never)));
+    return sendSuccess(res, 'Personal details updated', serialize(await enrichUserForClient(user as never)));
   }),
 ];
 
@@ -62,7 +64,7 @@ export const updateAbout = [
       where: { id: req.userId! },
       data: { about_us: req.body.about_us },
     });
-    return sendSuccess(res, 'About updated', serialize(sanitizeUser(user as never)));
+    return sendSuccess(res, 'About updated', serialize(await enrichUserForClient(user as never)));
   }),
 ];
 
@@ -91,7 +93,7 @@ export const updateEducation = [
         occupation_details: req.body.occupation_details,
       },
     });
-    return sendSuccess(res, 'Education updated', serialize(sanitizeUser(user as never)));
+    return sendSuccess(res, 'Education updated', serialize(await enrichUserForClient(user as never)));
   }),
 ];
 
@@ -111,7 +113,7 @@ export const updateContactLocation = [
         city: req.body.city,
       },
     });
-    return sendSuccess(res, 'Contact location updated', serialize(sanitizeUser(user as never)));
+    return sendSuccess(res, 'Contact location updated', serialize(await enrichUserForClient(user as never)));
   }),
 ];
 
@@ -127,65 +129,41 @@ export const updatePrivacy = [
       where: { id: req.userId! },
       data: { profile_visibility: req.body.profile_visibility },
     });
-    return sendSuccess(res, 'Privacy updated', serialize(sanitizeUser(user as never)));
+    return sendSuccess(res, 'Privacy updated', serialize(await enrichUserForClient(user as never)));
   }),
 ];
 
 export const updatePartnerPreferences = [
   ...fullUserGuard,
-  validateBody([...ALLOWED_PARTNER_FIELDS], [
-    V.nonEmptyString('marital_status'),
-    body('age_from').isInt({ min: 18, max: 100 }).withMessage('age_from must be 18-100'),
-    body('age_to')
-      .isInt({ min: 18, max: 100 })
-      .withMessage('age_to must be 18-100')
-      .custom((val, { req }) => val >= req.body.age_from)
-      .withMessage('age_to must be greater than or equal to age_from'),
-    V.nonEmptyString('highest_education'),
-    V.nonEmptyString('mother_tounge'),
-    V.nonEmptyString('country'),
-    V.nonEmptyString('height_from'),
-    V.nonEmptyString('height_to'),
-    V.optionalString('sect'),
-    V.optionalString('cast'),
-    V.optionalString('occupation'),
-    V.optionalString('state'),
-    V.optionalString('city'),
-    V.optionalString('annual_income'),
-  ]),
+  validateBody(
+    [...ALLOWED_PARTNER_FIELDS],
+    [
+      ...ALLOWED_PARTNER_FIELDS.map((field) => {
+        if (field === 'age_from' || field === 'age_to') {
+          return body(field)
+            .optional({ values: 'null' })
+            .custom((val) => {
+              if (val == null || val === '') return true;
+              const n = Number(val);
+              return Number.isInteger(n) && n >= 18 && n <= 100;
+            })
+            .withMessage(`${field} must be an integer between 18 and 100`);
+        }
+        return body(field).optional({ values: 'null' }).isString().trim();
+      }),
+      body('age_to')
+        .optional({ values: 'null' })
+        .custom((val, { req }) => {
+          if (val == null || val === '' || req.body.age_from == null || req.body.age_from === '') return true;
+          return Number(val) >= Number(req.body.age_from);
+        })
+        .withMessage('age_to must be greater than or equal to age_from'),
+    ]
+  ),
   asyncHandler(async (req: AuthRequest, res) => {
-    const bodyData = pickBody(req.body, [...ALLOWED_PARTNER_FIELDS]);
-    const heightFrom = heightStringToInches(String(bodyData.height_from));
-    const heightTo = heightStringToInches(String(bodyData.height_to));
-    if (heightFrom === null) {
-      throw AppError.badRequest('Invalid height format', { height_from: ['Use format like 5ft 4in'] });
-    }
-    if (heightTo === null) {
-      throw AppError.badRequest('Invalid height format', { height_to: ['Use format like 5ft 4in'] });
-    }
-
-    const payload = {
-      marital_status: String(bodyData.marital_status),
-      age_from: String(bodyData.age_from),
-      age_to: String(bodyData.age_to),
-      highest_education: String(bodyData.highest_education),
-      mother_tounge: String(bodyData.mother_tounge),
-      sect: bodyData.sect != null ? String(bodyData.sect) : undefined,
-      cast: bodyData.cast != null ? String(bodyData.cast) : undefined,
-      height_from: heightFrom.toString(),
-      height_to: heightTo.toString(),
-      occupation: bodyData.occupation != null ? String(bodyData.occupation) : undefined,
-      country: String(bodyData.country),
-      state: bodyData.state != null ? String(bodyData.state) : undefined,
-      city: bodyData.city != null ? String(bodyData.city) : undefined,
-      annual_income: bodyData.annual_income != null ? String(bodyData.annual_income) : undefined,
-    };
-
-    const existing = await prisma.partnerPreference.findFirst({ where: { user_id: req.userId! } });
-    const pref = existing
-      ? await prisma.partnerPreference.update({ where: { id: existing.id }, data: payload })
-      : await prisma.partnerPreference.create({ data: { user_id: req.userId!, ...payload } });
-    return sendSuccess(res, 'Partner preferences saved', serialize(pref));
+    const bodyData = pickBody(req.body, [...ALLOWED_PARTNER_FIELDS]) as Record<string, unknown>;
+    const pref = await upsertPartnerPreference(req.userId!, bodyData);
+    return sendSuccess(res, 'Partner preferences saved', await enrichAndSerialize(pref));
   }),
 ];
 
@@ -280,10 +258,7 @@ export const mySubscription = [
 export const notifications = [
   authenticate,
   asyncHandler(async (req: AuthRequest, res) => {
-    const messages = await prisma.adminMessage.findMany({
-      where: { receiver_id: req.userId! },
-      orderBy: { created_at: 'desc' },
-    });
+    const messages = await findNotificationsForUser(req.userId!);
     return sendSuccess(res, 'Notifications fetched', serialize(messages));
   }),
 ];
@@ -360,7 +335,7 @@ export const getMyProfile = [
 
     const { password: _, remember_token: __, ...safe } = user;
     return sendSuccess(res, 'Profile fetched', {
-      user: serialize(sanitizeUser(safe as never)),
+      user: serialize(await enrichSafeUser(safe)),
       completion: getProfileCompletion(safe as never),
     });
   }),
@@ -381,7 +356,7 @@ export const contactViewsByMe = [
       include: { viewedUser: { select: PUBLIC_USER_SELECT } },
       orderBy: { created_at: 'desc' },
     });
-    return sendSuccess(res, 'Contact views fetched', serialize(views));
+    return sendSuccess(res, 'Contact views fetched', await enrichAndSerialize(views));
   }),
 ];
 
@@ -393,6 +368,6 @@ export const contactViewsOfMe = [
       include: { viewer: { select: PUBLIC_USER_SELECT } },
       orderBy: { created_at: 'desc' },
     });
-    return sendSuccess(res, 'Who viewed my contact', serialize(views));
+    return sendSuccess(res, 'Who viewed my contact', await enrichAndSerialize(views));
   }),
 ];

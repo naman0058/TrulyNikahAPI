@@ -3,7 +3,7 @@ import { adminAsyncHandler, authenticateAdmin, AdminRequest } from '../middlewar
 import { validate, validateQuery, validateBody } from '../middleware';
 import { V } from '../utils/validation';
 import { getDashboardStats, loginAdmin } from '../services/admin.service';
-import { sendSuccess, serialize, paginationMeta } from '../utils/response';
+import { sendSuccess, serialize, paginationMeta, enrichAndSerialize } from '../utils/response';
 import prisma from '../lib/prisma';
 import { routeParam } from '../utils/helpers';
 import { AppError } from '../utils/errors';
@@ -150,7 +150,7 @@ export const getMember = [
     });
     if (!member) throw AppError.notFound('Member not found');
     const { password: _, remember_token: __, ...safe } = member;
-    return sendSuccess(res, 'Member fetched', serialize(safe));
+    return sendSuccess(res, 'Member fetched', await enrichAndSerialize(safe));
   }),
 ];
 
@@ -227,7 +227,7 @@ export const updateMember = [
 
     const updated = await prisma.user.update({ where: { id: userId }, data: data as never });
     const { password: _, remember_token: __, ...safe } = updated;
-    return sendSuccess(res, 'Member updated', serialize(safe));
+    return sendSuccess(res, 'Member updated', await enrichAndSerialize(safe));
   }),
 ];
 

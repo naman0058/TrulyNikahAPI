@@ -1,6 +1,6 @@
 import { AuthRequest, asyncHandler, fullUserGuard, validate, validateBody, validateQuery } from '../middleware';
 import prisma from '../lib/prisma';
-import { sendSuccess, serialize, paginationMeta } from '../utils/response';
+import { sendSuccess, serialize, paginationMeta, enrichAndSerialize } from '../utils/response';
 import { PUBLIC_USER_SELECT, maskEmail, maskPhone, routeParam, parseBigIntId } from '../utils/helpers';
 import { AppError } from '../utils/errors';
 import { getBestMatches, getNewProfiles } from '../services/discovery.service';
@@ -209,7 +209,7 @@ export const getDashboard = [
       getNewProfiles(user, 8),
     ]);
 
-    return sendSuccess(res, 'Dashboard data', serialize({ matches, recentProfiles, viewedProfiles, bestMatches, newProfiles }));
+    return sendSuccess(res, 'Dashboard data', await enrichAndSerialize({ matches, recentProfiles, viewedProfiles, bestMatches, newProfiles }));
   }),
 ];
 
@@ -219,7 +219,7 @@ export const getBestMatchesHandler = [
   asyncHandler(async (req: AuthRequest, res) => {
     const limit = Math.min(parseInt(String(req.query.limit ?? '12'), 10) || 12, 50);
     const matches = await getBestMatches(req.user!, limit);
-    return sendSuccess(res, 'Best matches fetched', serialize(matches));
+    return sendSuccess(res, 'Best matches fetched', await enrichAndSerialize(matches));
   }),
 ];
 
@@ -229,7 +229,7 @@ export const getNewProfilesHandler = [
   asyncHandler(async (req: AuthRequest, res) => {
     const limit = Math.min(parseInt(String(req.query.limit ?? '12'), 10) || 12, 50);
     const profiles = await getNewProfiles(req.user!, limit);
-    return sendSuccess(res, 'New profiles fetched', serialize(profiles));
+    return sendSuccess(res, 'New profiles fetched', await enrichAndSerialize(profiles));
   }),
 ];
 
@@ -250,7 +250,7 @@ export const viewProfile = [
       data: { viewer_id: req.userId!, viewed_user_id: profile.id },
     });
 
-    const safe = serialize({
+    const safe = await enrichAndSerialize({
       ...profile,
       password: undefined,
       remember_token: undefined,
@@ -317,6 +317,6 @@ export const searchProfiles = [
 
     const paginated = results.slice(0, limitNum);
 
-    return sendSuccess(res, 'Search results', serialize(paginated), 200, paginationMeta(pageNum, limitNum, results.length));
+    return sendSuccess(res, 'Search results', await enrichAndSerialize(paginated), 200, paginationMeta(pageNum, limitNum, results.length));
   }),
 ];

@@ -50,9 +50,9 @@ export async function getBestMatches(user: User, limit = 12) {
     orderBy: { created_at: 'desc' },
   });
 
-  if (pref?.age_from || pref?.age_to) {
-    const from = pref.age_from ? parseInt(pref.age_from, 10) : 18;
-    const to = pref.age_to ? parseInt(pref.age_to, 10) : 100;
+  if (pref?.age_from != null || pref?.age_to != null) {
+    const from = pref.age_from ?? 18;
+    const to = pref.age_to ?? 100;
     matches = matches.filter((p) => {
       const age = parseInt(p.age ?? '0', 10);
       return age >= from && age <= to;

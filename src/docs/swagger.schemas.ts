@@ -26,6 +26,21 @@ const policyType = schemaFromFieldOptions('policy_type', 'privacy');
 const validityType = schemaFromFieldOptions('plan_validity_type', 'monthly');
 const userStatus = schemaFromFieldOptions('user_status', 'pending');
 
+const userDisplayNameFields: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  description: 'Human-readable labels resolved from ID fields on the user record',
+  properties: {
+    sect_name: { type: 'string', example: 'Sunni', description: 'From sect (caste ID); "not available" if unset' },
+    cast_name: { type: 'string', example: 'Hanafi', description: 'From cast (sub-caste ID); "not available" if unset' },
+    country_name: { type: 'string', example: 'India' },
+    state_name: { type: 'string', example: 'Maharashtra' },
+    city_name: { type: 'string', example: 'Mumbai' },
+    parent_country_name: { type: 'string', example: 'India' },
+    parent_state_name: { type: 'string', example: 'Uttar Pradesh' },
+    parent_city_name: { type: 'string', example: 'Lucknow' },
+  },
+};
+
 export const swaggerSchemas: Record<string, OpenAPIV3.SchemaObject> = {
   ApiResponse: {
     type: 'object',
@@ -38,6 +53,7 @@ export const swaggerSchemas: Record<string, OpenAPIV3.SchemaObject> = {
       meta: { type: 'object' },
     },
   },
+  UserDisplayNameFields: userDisplayNameFields,
   RegisterRequest: {
     type: 'object',
     required: ['email', 'behalf', 'contact_number', 'password'],
@@ -100,7 +116,11 @@ export const swaggerSchemas: Record<string, OpenAPIV3.SchemaObject> = {
       contact_number: { type: 'string', example: '9876543210' },
       phoneVerified: { type: 'boolean', example: true, description: 'Mobile ownership confirmed by OTP' },
       token: { type: 'string', description: 'JWT — only when accountExists is true' },
-      user: { type: 'object', description: 'User profile — only when accountExists is true' },
+      user: {
+        type: 'object',
+        description: 'User profile with ID fields plus resolved *_name labels',
+        allOf: [{ $ref: '#/components/schemas/UserDisplayNameFields' }],
+      },
       onboarding: { type: 'object', description: 'Onboarding flags — only when accountExists is true' },
     },
   },
@@ -109,7 +129,11 @@ export const swaggerSchemas: Record<string, OpenAPIV3.SchemaObject> = {
     description: 'Returned by email login and mobile OTP login',
     properties: {
       token: { type: 'string', description: 'JWT Bearer token' },
-      user: { type: 'object' },
+      user: {
+        type: 'object',
+        description: 'User profile with ID fields plus resolved *_name labels',
+        allOf: [{ $ref: '#/components/schemas/UserDisplayNameFields' }],
+      },
       onboarding: {
         type: 'object',
         properties: {
@@ -277,21 +301,21 @@ export const swaggerSchemas: Record<string, OpenAPIV3.SchemaObject> = {
   },
   PartnerPreferencesRequest: {
     type: 'object',
-    required: ['marital_status', 'age_from', 'age_to', 'highest_education', 'mother_tounge', 'country', 'height_from', 'height_to'],
+    description: 'All fields optional — send only the preferences you want to save',
     properties: {
       marital_status: { type: 'string', example: 'Never Married' },
       age_from: { type: 'integer', example: 22 },
       age_to: { type: 'integer', example: 32 },
       highest_education: { type: 'string', example: 'Bachelors' },
       mother_tounge: { type: 'string', example: 'Urdu' },
-      sect: { type: 'string', example: '1' },
-      cast: { type: 'string', example: '5' },
+      sect: { type: 'string', example: '1', description: 'Caste ID' },
+      cast: { type: 'string', example: '5', description: 'Sub-caste ID' },
       height_from: { type: 'string', example: '5ft 0in' },
       height_to: { type: 'string', example: '6ft 0in' },
       occupation: { type: 'string' },
-      country: { type: 'string', example: '101' },
-      state: { type: 'string' },
-      city: { type: 'string' },
+      country: { type: 'string', example: '76', description: 'Country ID' },
+      state: { type: 'string', example: '21', description: 'State ID' },
+      city: { type: 'string', example: '405', description: 'City ID' },
       annual_income: { type: 'string' },
     },
   },

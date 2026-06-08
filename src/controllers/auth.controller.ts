@@ -21,13 +21,13 @@ import {
   loginUser,
   loginWithOtp,
   registerUser,
-  sanitizeUser,
   saveProfileStep1,
   saveProfileStep2,
   sendLoginOtp,
   sendMobileAuthOtp,
   verifyMobileAuthOtp,
 } from '../services/auth.service';
+import { enrichUserForClient } from '../services/user-display.service';
 import { createAndSendOtp, verifyOtpForUser, canResendOtp } from '../services/otp.service';
 import { getProfileCompletion, isProfileComplete } from '../utils/helpers';
 import { sendSuccess, serialize } from '../utils/response';
@@ -57,7 +57,7 @@ export const register = [
       'Registration successful. OTP sent to your phone.',
       {
         token: result.token,
-        user: serialize(sanitizeUser(result.user as never)),
+        user: serialize(await enrichUserForClient(result.user as never)),
         nextStep: 'otp_verification',
       },
       201
@@ -69,7 +69,7 @@ export const login = [
   validateBody([...AUTH_LOGIN_FIELDS], [V.email(), V.nonEmptyString('password', 'password')]),
   asyncHandler(async (req, res) => {
     const result = await loginUser(req.body.email, req.body.password);
-    return sendSuccess(res, 'Login successful', buildLoginPayload(result.user, result.token));
+    return sendSuccess(res, 'Login successful', await buildLoginPayload(result.user, result.token));
   }),
 ];
 
@@ -92,7 +92,7 @@ export const verifyLoginOtp = [
         contact_number: ['Use /auth/mobile/verify-otp for new and existing users'],
       });
     }
-    return sendSuccess(res, 'Login successful', buildLoginPayload(result.user!, result.token));
+    return sendSuccess(res, 'Login successful', await buildLoginPayload(result.user!, result.token));
   }),
 ];
 
@@ -127,7 +127,7 @@ export const verifyMobileAuthOtpHandler = [
       nextStep: result.nextStep,
       contact_number: result.contact_number,
       phoneVerified: result.phoneVerified,
-      ...buildLoginPayload(result.user!, result.token),
+      ...(await buildLoginPayload(result.user!, result.token)),
     });
   }),
 ];
@@ -148,7 +148,7 @@ export const me = [
   asyncHandler(async (req: AuthRequest, res) => {
     const user = req.user!;
     return sendSuccess(res, 'Profile fetched', {
-      user: serialize(sanitizeUser(user as never)),
+      user: serialize(await enrichUserForClient(user as never)),
       onboarding: {
         phoneVerified: user.phone_verified,
         profileComplete: isProfileComplete(user),
@@ -198,7 +198,7 @@ export const verifyOtp = [
     if (!result.ok) throw AppError.otpError(result.reason);
     const updated = await prisma.user.findUnique({ where: { id: user.id } });
     return sendSuccess(res, 'OTP verified successfully', {
-      user: serialize(sanitizeUser(updated as never)),
+      user: serialize(await enrichUserForClient(updated as never)),
       nextStep: isProfileComplete(updated!) ? 'dashboard' : 'complete_profile',
     });
   }),
@@ -252,7 +252,7 @@ export const profileStep1 = [
   ]),
   asyncHandler(async (req: AuthRequest, res) => {
     const user = await saveProfileStep1(req.userId!, req.body);
-    return sendSuccess(res, 'Step 1 saved', { user: serialize(sanitizeUser(user as never)) });
+    return sendSuccess(res, 'Step 1 saved', { user: serialize(await enrichUserForClient(user as never)) });
   }),
 ];
 
@@ -271,19 +271,19 @@ export const profileStep2 = [
   asyncHandler(async (req: AuthRequest, res) => {
     const user = await saveProfileStep2(req.userId!, req.body);
     return sendSuccess(res, 'Profile completed', {
-      user: serialize(sanitizeUser(user as never)),
+      user: serialize(await enrichUserForClient(user as never)),
       nextStep: 'dashboard',
     });
   }),
 ];
 
-function buildLoginPayload(
-  user: Parameters<typeof sanitizeUser>[0],
+async function buildLoginPayload(
+  user: Parameters<typeof enrichUserForClient>[0],
   token: string
 ) {
   return {
     token,
-    user: serialize(sanitizeUser(user as never)),
+    user: serialize(await enrichUserForClient(user as never)),
     onboarding: {
       phoneVerified: user.phone_verified,
       profileComplete: isProfileComplete(user as never),

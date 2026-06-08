@@ -1,7 +1,7 @@
 import { body } from 'express-validator';
 import { AuthRequest, asyncHandler, authenticate, requireProfileComplete, validate, validateBody } from '../middleware';
 import prisma from '../lib/prisma';
-import { sendSuccess, serialize } from '../utils/response';
+import { sendSuccess, serialize, enrichAndSerialize } from '../utils/response';
 import { PUBLIC_USER_SELECT, routeParam } from '../utils/helpers';
 import { AppError } from '../utils/errors';
 import { MESSAGE_SEND_FIELDS, V } from '../utils/validation';
@@ -35,7 +35,7 @@ export const getConversations = [
       include: { fromUser: { select: PUBLIC_USER_SELECT } },
     });
 
-    return sendSuccess(res, 'Conversations fetched', serialize({ sentAccepted, receivedAccepted }));
+    return sendSuccess(res, 'Conversations fetched', await enrichAndSerialize({ sentAccepted, receivedAccepted }));
   }),
 ];
 

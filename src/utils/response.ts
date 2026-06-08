@@ -1,5 +1,6 @@
 import { Response } from 'express';
 import { ErrorCode } from './errors';
+import { enrichPayload } from '../services/user-display.service';
 
 export type ApiResponse<T = unknown> = {
   success: boolean;
@@ -54,6 +55,11 @@ export function serialize<T>(data: T): T {
   return JSON.parse(
     JSON.stringify(data, (_key, value) => (typeof value === 'bigint' ? Number(value) : value))
   );
+}
+
+/** Resolve ID fields to *_name labels, then serialize BigInts for JSON. */
+export async function enrichAndSerialize<T>(data: T) {
+  return serialize(await enrichPayload(data));
 }
 
 export function paginationMeta(page: number, limit: number, total: number) {

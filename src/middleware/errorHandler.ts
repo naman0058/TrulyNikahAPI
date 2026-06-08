@@ -26,6 +26,8 @@ function handlePrismaError(err: Prisma.PrismaClientKnownRequestError): AppError 
       return AppError.notFound('Database table not found. Run Laravel location migrations on the server.');
     case 'P2022':
       return AppError.internal('Database column mismatch. Update API or run migrations.');
+    case 'P2032':
+      return AppError.badRequest('Invalid value for a database field. Check numeric fields such as age_from and age_to.');
     case 'P2025':
       return AppError.notFound('Record not found');
     case 'P2003':

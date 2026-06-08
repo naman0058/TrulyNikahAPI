@@ -1,6 +1,6 @@
 import { AuthRequest, asyncHandler, fullUserGuard, validate, validateBody } from '../middleware';
 import prisma from '../lib/prisma';
-import { sendSuccess, serialize } from '../utils/response';
+import { sendSuccess, serialize, enrichAndSerialize } from '../utils/response';
 import { PUBLIC_USER_SELECT, routeParam } from '../utils/helpers';
 import { AppError } from '../utils/errors';
 import { V } from '../utils/validation';
@@ -59,7 +59,7 @@ export const interestsReceived = [
       include: { fromUser: { select: PUBLIC_USER_SELECT } },
       orderBy: { created_at: 'desc' },
     });
-    return sendSuccess(res, 'Interests received', serialize(list));
+    return sendSuccess(res, 'Interests received', await enrichAndSerialize(list));
   }),
 ];
 
@@ -71,7 +71,7 @@ export const interestsSent = [
       include: { toUser: { select: PUBLIC_USER_SELECT } },
       orderBy: { created_at: 'desc' },
     });
-    return sendSuccess(res, 'Interests sent', serialize(list));
+    return sendSuccess(res, 'Interests sent', await enrichAndSerialize(list));
   }),
 ];
 
@@ -97,7 +97,7 @@ export const getShortlist = [
       where: { user_id: req.userId! },
       include: { shortlistedUser: { select: PUBLIC_USER_SELECT } },
     });
-    return sendSuccess(res, 'Shortlist fetched', serialize(list));
+    return sendSuccess(res, 'Shortlist fetched', await enrichAndSerialize(list));
   }),
 ];
 
@@ -123,7 +123,7 @@ export const getIgnored = [
       where: { user_id: req.userId! },
       include: { ignoredUser: { select: PUBLIC_USER_SELECT } },
     });
-    return sendSuccess(res, 'Ignored profiles fetched', serialize(list));
+    return sendSuccess(res, 'Ignored profiles fetched', await enrichAndSerialize(list));
   }),
 ];
 
@@ -150,7 +150,7 @@ export const profileViewsByMe = [
       include: { viewedUser: { select: PUBLIC_USER_SELECT } },
       orderBy: { created_at: 'desc' },
     });
-    return sendSuccess(res, 'Profiles viewed by me', serialize(views));
+    return sendSuccess(res, 'Profiles viewed by me', await enrichAndSerialize(views));
   }),
 ];
 
@@ -162,6 +162,6 @@ export const profileViewsOfMe = [
       include: { viewer: { select: PUBLIC_USER_SELECT } },
       orderBy: { created_at: 'desc' },
     });
-    return sendSuccess(res, 'Who viewed my profile', serialize(views));
+    return sendSuccess(res, 'Who viewed my profile', await enrichAndSerialize(views));
   }),
 ];

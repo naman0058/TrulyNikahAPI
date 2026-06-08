@@ -381,8 +381,8 @@ model PartnerPreference {
   id                BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
   user_id           BigInt   @db.UnsignedBigInt
   marital_status    String?  @db.VarChar(255)
-  age_from          String?  @db.VarChar(255)
-  age_to            String?  @db.VarChar(255)
+  age_from          Int?
+  age_to            Int?
   highest_education String?  @db.VarChar(255)
   mother_tounge     String?  @db.VarChar(255)
   sect              String?  @db.VarChar(255)
@@ -394,8 +394,8 @@ model PartnerPreference {
   state             String?  @db.VarChar(255)
   city              String?  @db.VarChar(255)
   annual_income     String?  @db.VarChar(255)
-  created_at        DateTime @default(now())
-  updated_at        DateTime @updatedAt
+  created_at        DateTime? @default(now())
+  updated_at        DateTime? @updatedAt
   user              User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@map("partner_preferences")
@@ -539,12 +539,12 @@ model RequestACall {
 
 model AdminMessage {
   id          BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
-  sender_id   BigInt    @db.UnsignedBigInt
-  receiver_id BigInt    @db.UnsignedBigInt
+  sender_id   BigInt?   @db.UnsignedBigInt
+  receiver_id BigInt?   @db.UnsignedBigInt
   message     String    @db.Text
   read_at     DateTime?
-  created_at  DateTime  @default(now())
-  updated_at  DateTime  @updatedAt
+  created_at  DateTime? @default(now())
+  updated_at  DateTime?
 
   @@map("admin_messages")
 }
