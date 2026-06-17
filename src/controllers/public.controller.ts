@@ -265,6 +265,7 @@ export const viewProfile = [
 export const searchProfiles = [
   ...fullUserGuard,
   validateBody([...SEARCH_BODY_FIELDS], [
+    body('name').optional().isString().trim().isLength({ min: 1, max: 255 }).withMessage('name must be 1-255 characters'),
     body('age_from').optional().isInt({ min: 18, max: 100 }).withMessage('age_from must be 18-100'),
     body('age_to').optional().isInt({ min: 18, max: 100 }).withMessage('age_to must be 18-100'),
     body('page').optional().isInt({ min: 1 }).withMessage('page must be a positive integer'),
@@ -279,7 +280,7 @@ export const searchProfiles = [
   asyncHandler(async (req: AuthRequest, res) => {
     const user = req.user!;
     const oppositeGender = user.gender === 'male' ? 'female' : 'male';
-    const { age_from, age_to, country, state, city, marital_status, sect, cast, page = 1, limit = 20 } = req.body;
+    const { name, age_from, age_to, country, state, city, marital_status, sect, cast, page = 1, limit = 20 } = req.body;
 
     const pageNum = Math.max(1, parseInt(String(page), 10) || 1);
     const limitNum = Math.min(50, Math.max(1, parseInt(String(limit), 10) || 20));
@@ -291,6 +292,9 @@ export const searchProfiles = [
       status: { in: ['verified', 'premium', 'pending'] },
     };
 
+    if (name && String(name).trim()) {
+      where.name = { contains: String(name).trim() };
+    }
     if (country) where.country = String(country);
     if (state) where.state = String(state);
     if (city) where.city = String(city);

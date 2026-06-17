@@ -49,7 +49,7 @@ model User {
   phone_verified     Boolean   @default(false)
   password           String    @db.VarChar(255)
   status             UserStatus @default(pending)
-  profile_visibility ProfileVisibility @default(everyone)
+  profile_visibility String    @default("everyone") @db.VarChar(255)
   remember_token     String?   @db.VarChar(100)
   last_login_at      DateTime?
   created_at         DateTime  @default(now())
@@ -86,14 +86,6 @@ enum UserStatus {
   block
   verified
   free
-  premium
-}
-
-enum ProfileVisibility {
-  no_one    @map("no-one")
-  everyone
-  interested
-  verified
   premium
 }
 

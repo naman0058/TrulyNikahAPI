@@ -215,7 +215,9 @@ export const swaggerSchemas: Record<string, OpenAPIV3.SchemaObject> = {
   },
   SearchProfilesRequest: {
     type: 'object',
+    description: 'All filters optional — combine name with location, age, caste, etc.',
     properties: {
+      name: { type: 'string', example: 'Ahmed', description: 'Partial match on profile name' },
       age_from: { type: 'integer', example: 22 },
       age_to: { type: 'integer', example: 35 },
       country: { type: 'string', example: '101' },

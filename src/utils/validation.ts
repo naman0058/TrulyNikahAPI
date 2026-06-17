@@ -135,6 +135,7 @@ export const ALLOWED_FAMILY_FIELDS = [
 export const ALLOWED_RELIGIOUS_FIELDS = ['religious', 'quran', 'namaz', 'roza', 'smoke', 'drink'] as const;
 
 export const SEARCH_BODY_FIELDS = [
+  'name',
   'age_from',
   'age_to',
   'country',

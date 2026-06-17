@@ -125,7 +125,16 @@ async function loadNameMaps(bucket: IdBucket): Promise<NameMaps> {
   return { countries, states, cities, sects, casts };
 }
 
+function normalizeLegacyUserFields(record: Record<string, unknown>): void {
+  if (!('profile_visibility' in record)) return;
+  const value = record.profile_visibility;
+  if (value == null || value === '') {
+    record.profile_visibility = 'everyone';
+  }
+}
+
 function applyDisplayNames(record: Record<string, unknown>, maps: NameMaps): void {
+  normalizeLegacyUserFields(record);
   for (const [idField, nameField] of Object.entries(DISPLAY_ID_FIELD_MAP) as [DisplayIdField, string][]) {
     if (!(idField in record)) continue;
     const mapKey = FIELD_TO_MAP[idField];
