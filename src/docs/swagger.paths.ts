@@ -356,9 +356,64 @@ export function buildSwaggerPaths(): OpenAPIV3.PathsObject {
       get: opGet('Social', 'Get shortlist', { security: bearer }),
       post: opPost('Social', 'Add to shortlist', { security: bearer, body: S('ShortlistRequest') }),
     },
+    '/shortlists/{userId}': {
+      delete: opDelete('Social', 'Remove from shortlist', {
+        security: bearer,
+        params: [pathParam('userId', 'Shortlisted user ID', 42)],
+      }),
+    },
     '/ignores': {
       get: opGet('Social', 'Get ignored profiles', { security: bearer }),
       post: opPost('Social', 'Ignore profile', { security: bearer, body: S('IgnoreRequest') }),
+    },
+    '/ignores/{userId}': {
+      delete: opDelete('Social', 'Unignore profile (same as unblock)', {
+        security: bearer,
+        params: [pathParam('userId', 'Ignored user ID', 42)],
+      }),
+    },
+    '/blocks': {
+      get: opGet('Social', 'List blocked users', { security: bearer }),
+    },
+    '/blocks/{userId}': {
+      post: opPost('Social', 'Block user', {
+        security: bearer,
+        noBody: true,
+        params: [pathParam('userId', 'User ID to block', 42)],
+      }),
+      delete: opDelete('Social', 'Unblock user', {
+        security: bearer,
+        params: [pathParam('userId', 'Blocked user ID', 42)],
+      }),
+    },
+    '/gallery-requests/sent': { get: opGet('Social', 'Gallery requests I sent', { security: bearer }) },
+    '/gallery-requests/received': { get: opGet('Social', 'Gallery requests I received', { security: bearer }) },
+    '/gallery-requests/{userId}': {
+      post: opPost('Social', 'Send gallery access request to another user', {
+        security: bearer,
+        noBody: true,
+        params: [pathParam('userId', 'Target user ID', 42)],
+      }),
+    },
+    '/gallery-requests/{userId}/accept': {
+      post: opPost('Social', 'Accept gallery request (owner only)', {
+        security: bearer,
+        noBody: true,
+        params: [pathParam('userId', 'Requester user ID', 42)],
+      }),
+    },
+    '/gallery-requests/{userId}/reject': {
+      post: opPost('Social', 'Reject gallery request (owner only)', {
+        security: bearer,
+        noBody: true,
+        params: [pathParam('userId', 'Requester user ID', 42)],
+      }),
+    },
+    '/gallery-requests/{userId}/gallery': {
+      get: opGet('Social', 'View user gallery after request accepted', {
+        security: bearer,
+        params: [pathParam('userId', 'User whose gallery to view', 42)],
+      }),
     },
     '/reports': { post: opPost('Social', 'Report profile', { security: bearer, body: S('ReportRequest') }) },
     '/profiles/views/by-me': { get: opGet('Social', 'Profiles viewed by me', { security: bearer }) },

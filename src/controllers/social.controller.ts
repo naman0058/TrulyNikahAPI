@@ -4,6 +4,19 @@ import { sendSuccess, serialize, enrichAndSerialize } from '../utils/response';
 import { PUBLIC_USER_SELECT, routeParam } from '../utils/helpers';
 import { AppError } from '../utils/errors';
 import { V } from '../utils/validation';
+import {
+  acceptGalleryRequest,
+  blockUser,
+  rejectGalleryRequest,
+  removeFromShortlist,
+  sendGalleryRequest,
+  unblockUser,
+} from '../services/social.service';
+import { PROFILE_IMAGE_FIELDS, toPublicMediaUrl } from '../middleware/upload';
+
+async function targetUserIdFromParams(req: AuthRequest): Promise<bigint> {
+  return BigInt(routeParam(req.params.userId));
+}
 
 export const sendInterest = [
   ...fullUserGuard,
@@ -101,6 +114,15 @@ export const getShortlist = [
   }),
 ];
 
+export const removeShortlist = [
+  ...fullUserGuard,
+  validate([V.positiveIntParam('userId', 'userId')]),
+  asyncHandler(async (req: AuthRequest, res) => {
+    await removeFromShortlist(req.userId!, await targetUserIdFromParams(req));
+    return sendSuccess(res, 'Removed from shortlist');
+  }),
+];
+
 export const addIgnore = [
   ...fullUserGuard,
   validateBody(['ignored_user_id'], [V.positiveIntBody('ignored_user_id')]),
@@ -124,6 +146,135 @@ export const getIgnored = [
       include: { ignoredUser: { select: PUBLIC_USER_SELECT } },
     });
     return sendSuccess(res, 'Ignored profiles fetched', await enrichAndSerialize(list));
+  }),
+];
+
+/** Block another user (stored in ignores table — same as Laravel ignore) */
+export const blockUserHandler = [
+  ...fullUserGuard,
+  validate([V.positiveIntParam('userId', 'userId')]),
+  asyncHandler(async (req: AuthRequest, res) => {
+    const result = await blockUser(req.userId!, await targetUserIdFromParams(req));
+    if (result.alreadyBlocked) {
+      return sendSuccess(res, 'User already blocked', { alreadyBlocked: true });
+    }
+    return sendSuccess(res, 'User blocked successfully', serialize(result.record), 201);
+  }),
+];
+
+export const unblockUserHandler = [
+  ...fullUserGuard,
+  validate([V.positiveIntParam('userId', 'userId')]),
+  asyncHandler(async (req: AuthRequest, res) => {
+    await unblockUser(req.userId!, await targetUserIdFromParams(req));
+    return sendSuccess(res, 'User unblocked successfully');
+  }),
+];
+
+export const getBlockedUsers = [
+  ...fullUserGuard,
+  asyncHandler(async (req: AuthRequest, res) => {
+    const list = await prisma.ignore.findMany({
+      where: { user_id: req.userId! },
+      include: { ignoredUser: { select: PUBLIC_USER_SELECT } },
+      orderBy: { created_at: 'desc' },
+    });
+    return sendSuccess(res, 'Blocked users fetched', await enrichAndSerialize(list));
+  }),
+];
+
+export const removeIgnore = [
+  ...fullUserGuard,
+  validate([V.positiveIntParam('userId', 'userId')]),
+  asyncHandler(async (req: AuthRequest, res) => {
+    await unblockUser(req.userId!, await targetUserIdFromParams(req));
+    return sendSuccess(res, 'User unblocked successfully');
+  }),
+];
+
+export const sendGalleryRequestHandler = [
+  ...fullUserGuard,
+  validate([V.positiveIntParam('userId', 'userId')]),
+  asyncHandler(async (req: AuthRequest, res) => {
+    const result = await sendGalleryRequest(req.userId!, await targetUserIdFromParams(req));
+    if (result.alreadySent) {
+      return sendSuccess(res, 'Gallery request already pending', { alreadySent: true, request: serialize(result.request) });
+    }
+    const message = 'resent' in result && result.resent ? 'Gallery request sent again' : 'Gallery request sent';
+    return sendSuccess(res, message, serialize(result.request), 201);
+  }),
+];
+
+export const galleryRequestsSent = [
+  ...fullUserGuard,
+  asyncHandler(async (req: AuthRequest, res) => {
+    const list = await prisma.galleryRequest.findMany({
+      where: { from_user_id: req.userId! },
+      include: { toUser: { select: PUBLIC_USER_SELECT } },
+      orderBy: { created_at: 'desc' },
+    });
+    return sendSuccess(res, 'Gallery requests sent', await enrichAndSerialize(list));
+  }),
+];
+
+export const galleryRequestsReceived = [
+  ...fullUserGuard,
+  asyncHandler(async (req: AuthRequest, res) => {
+    const list = await prisma.galleryRequest.findMany({
+      where: { to_user_id: req.userId! },
+      include: { fromUser: { select: PUBLIC_USER_SELECT } },
+      orderBy: { created_at: 'desc' },
+    });
+    return sendSuccess(res, 'Gallery requests received', await enrichAndSerialize(list));
+  }),
+];
+
+export const acceptGalleryRequestHandler = [
+  ...fullUserGuard,
+  validate([V.positiveIntParam('userId', 'userId')]),
+  asyncHandler(async (req: AuthRequest, res) => {
+    const request = await acceptGalleryRequest(req.userId!, await targetUserIdFromParams(req));
+    return sendSuccess(res, 'Gallery request accepted', serialize(request));
+  }),
+];
+
+export const rejectGalleryRequestHandler = [
+  ...fullUserGuard,
+  validate([V.positiveIntParam('userId', 'userId')]),
+  asyncHandler(async (req: AuthRequest, res) => {
+    const request = await rejectGalleryRequest(req.userId!, await targetUserIdFromParams(req));
+    return sendSuccess(res, 'Gallery request rejected', serialize(request));
+  }),
+];
+
+/** View another user's gallery after they accepted your request */
+export const viewUserGallery = [
+  ...fullUserGuard,
+  validate([V.positiveIntParam('userId', 'userId')]),
+  asyncHandler(async (req: AuthRequest, res) => {
+    const targetId = await targetUserIdFromParams(req);
+    const authUserId = req.userId!;
+
+    if (targetId === authUserId) {
+      throw AppError.badRequest('Use GET /me/gallery for your own gallery');
+    }
+
+    const access = await prisma.galleryRequest.findFirst({
+      where: { from_user_id: authUserId, to_user_id: targetId, status: 'accepted' },
+    });
+    if (!access) {
+      throw AppError.forbidden('Gallery access not granted. Send a request and wait for acceptance.');
+    }
+
+    const manager = await prisma.profileManager.findUnique({ where: { user_id: targetId } });
+    if (!manager) {
+      return sendSuccess(res, 'Gallery fetched', { photos: {} });
+    }
+
+    const photos = Object.fromEntries(
+      PROFILE_IMAGE_FIELDS.map((f) => [f, toPublicMediaUrl(manager[f as keyof typeof manager] as string)])
+    );
+    return sendSuccess(res, 'Gallery fetched', serialize({ userId: targetId, photos }));
   }),
 ];
 

@@ -76,6 +76,8 @@ model User {
   contactViewed      ContactView[]      @relation("ContactViewed")
   reportsMade        ReportMember[]     @relation("ReportReporter")
   reportsReceived    ReportMember[]     @relation("ReportTarget")
+  galleryRequestsSent     GalleryRequest[] @relation("GalleryRequestFrom")
+  galleryRequestsReceived GalleryRequest[] @relation("GalleryRequestTo")
 
   @@map("users")
 }
@@ -221,6 +223,26 @@ model Ignore {
   ignoredUser     User     @relation("IgnoreTarget", fields: [ignored_user_id], references: [id], onDelete: Cascade)
 
   @@map("ignores")
+}
+
+enum GalleryRequestStatus {
+  pending
+  accepted
+  rejected
+}
+
+model GalleryRequest {
+  id           BigInt               @id @default(autoincrement()) @db.UnsignedBigInt
+  from_user_id BigInt               @db.UnsignedBigInt
+  to_user_id   BigInt               @db.UnsignedBigInt
+  status       GalleryRequestStatus @default(pending)
+  created_at   DateTime?            @default(now())
+  updated_at   DateTime?
+  fromUser     User                 @relation("GalleryRequestFrom", fields: [from_user_id], references: [id], onDelete: Cascade)
+  toUser       User                 @relation("GalleryRequestTo", fields: [to_user_id], references: [id], onDelete: Cascade)
+
+  @@unique([from_user_id, to_user_id])
+  @@map("gallery_requests")
 }
 
 model ReportMember {

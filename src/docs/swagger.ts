@@ -14,7 +14,7 @@ const ALL_TAGS: OpenAPIV3.TagObject[] = [
   { name: 'Profile', description: 'User profile management' },
   { name: 'Gallery', description: 'Profile photo uploads' },
   { name: 'Discovery', description: 'Dashboard, search, profiles' },
-  { name: 'Social', description: 'Interests, shortlist, ignore, report' },
+  { name: 'Social', description: 'Interests, shortlist, block, gallery requests, ignore, report' },
   { name: 'Messaging', description: 'Chat between matched users' },
   { name: 'Payments', description: 'Razorpay subscriptions' },
   { name: 'Public', description: 'Locations, castes, CMS content, plans, field option reference' },
