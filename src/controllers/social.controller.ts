@@ -6,12 +6,13 @@ import { AppError } from '../utils/errors';
 import { V } from '../utils/validation';
 import {
   acceptGalleryRequest,
-  blockUser,
+  hasAcceptedGalleryAccess,
+  listGalleryRequestsReceived,
+  listGalleryRequestsSent,
   rejectGalleryRequest,
-  removeFromShortlist,
   sendGalleryRequest,
-  unblockUser,
-} from '../services/social.service';
+} from '../services/gallery-request.service';
+import { blockUser, removeFromShortlist, unblockUser } from '../services/social.service';
 import { PROFILE_IMAGE_FIELDS, toPublicMediaUrl } from '../middleware/upload';
 
 async function targetUserIdFromParams(req: AuthRequest): Promise<bigint> {
@@ -208,11 +209,7 @@ export const sendGalleryRequestHandler = [
 export const galleryRequestsSent = [
   ...fullUserGuard,
   asyncHandler(async (req: AuthRequest, res) => {
-    const list = await prisma.galleryRequest.findMany({
-      where: { from_user_id: req.userId! },
-      include: { toUser: { select: PUBLIC_USER_SELECT } },
-      orderBy: { created_at: 'desc' },
-    });
+    const list = await listGalleryRequestsSent(req.userId!);
     return sendSuccess(res, 'Gallery requests sent', await enrichAndSerialize(list));
   }),
 ];
@@ -220,11 +217,7 @@ export const galleryRequestsSent = [
 export const galleryRequestsReceived = [
   ...fullUserGuard,
   asyncHandler(async (req: AuthRequest, res) => {
-    const list = await prisma.galleryRequest.findMany({
-      where: { to_user_id: req.userId! },
-      include: { fromUser: { select: PUBLIC_USER_SELECT } },
-      orderBy: { created_at: 'desc' },
-    });
+    const list = await listGalleryRequestsReceived(req.userId!);
     return sendSuccess(res, 'Gallery requests received', await enrichAndSerialize(list));
   }),
 ];
@@ -259,9 +252,7 @@ export const viewUserGallery = [
       throw AppError.badRequest('Use GET /me/gallery for your own gallery');
     }
 
-    const access = await prisma.galleryRequest.findFirst({
-      where: { from_user_id: authUserId, to_user_id: targetId, status: 'accepted' },
-    });
+    const access = await hasAcceptedGalleryAccess(authUserId, targetId);
     if (!access) {
       throw AppError.forbidden('Gallery access not granted. Send a request and wait for acceptance.');
     }

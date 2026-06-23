@@ -25,7 +25,14 @@ function handlePrismaError(err: Prisma.PrismaClientKnownRequestError): AppError 
     case 'P2021':
       return AppError.notFound('Database table not found. Run Laravel location migrations on the server.');
     case 'P2022':
-      return AppError.internal('Database column mismatch. Update API or run migrations.');
+      return new AppError(
+        'Database column mismatch. Update API or run migrations.',
+        500,
+        ErrorCode.INTERNAL_ERROR,
+        undefined,
+        true,
+        { column: err.meta?.column, model: err.meta?.modelName }
+      );
     case 'P2032':
       return AppError.badRequest('Invalid value for a database field. Check numeric fields such as age_from and age_to.');
     case 'P2025':
@@ -82,7 +89,10 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
     return sendError(res, appErr.message, appErr.statusCode, {
       code: appErr.code,
       errors: appErr.errors,
-      meta: { prismaCode: err.code },
+      meta: {
+        ...(appErr.meta ?? {}),
+        ...(err instanceof Prisma.PrismaClientKnownRequestError ? { prismaCode: err.code } : {}),
+      },
     });
   }
   if (err instanceof Prisma.PrismaClientValidationError) {

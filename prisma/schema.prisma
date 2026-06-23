@@ -225,21 +225,15 @@ model Ignore {
   @@map("ignores")
 }
 
-enum GalleryRequestStatus {
-  pending
-  accepted
-  rejected
-}
-
 model GalleryRequest {
-  id           BigInt               @id @default(autoincrement()) @db.UnsignedBigInt
-  from_user_id BigInt               @db.UnsignedBigInt
-  to_user_id   BigInt               @db.UnsignedBigInt
-  status       GalleryRequestStatus @default(pending)
-  created_at   DateTime?            @default(now())
+  id           BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  from_user_id BigInt    @db.UnsignedBigInt
+  to_user_id   BigInt    @db.UnsignedBigInt
+  status       String    @default("pending") @db.VarChar(20)
+  created_at   DateTime? @default(now())
   updated_at   DateTime?
-  fromUser     User                 @relation("GalleryRequestFrom", fields: [from_user_id], references: [id], onDelete: Cascade)
-  toUser       User                 @relation("GalleryRequestTo", fields: [to_user_id], references: [id], onDelete: Cascade)
+  fromUser     User      @relation("GalleryRequestFrom", fields: [from_user_id], references: [id], onDelete: Cascade)
+  toUser       User      @relation("GalleryRequestTo", fields: [to_user_id], references: [id], onDelete: Cascade)
 
   @@unique([from_user_id, to_user_id])
   @@map("gallery_requests")
