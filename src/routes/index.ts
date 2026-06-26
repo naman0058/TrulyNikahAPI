@@ -21,6 +21,8 @@ router.get('/', (_req, res) => {
         'GET /stories',
         'GET /policies/:type',
         'GET /counters',
+        'GET /reference/field-options',
+        'GET /reference/search-filters',
         'POST /auth/register',
         'POST /auth/login',
         'POST /auth/mobile/send-otp',

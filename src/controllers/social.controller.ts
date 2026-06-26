@@ -7,6 +7,8 @@ import { V } from '../utils/validation';
 import {
   acceptGalleryRequest,
   hasAcceptedGalleryAccess,
+  listGalleryRequestsAccepted,
+  listGalleryRequestsGrantedByMe,
   listGalleryRequestsReceived,
   listGalleryRequestsSent,
   rejectGalleryRequest,
@@ -219,6 +221,22 @@ export const galleryRequestsReceived = [
   asyncHandler(async (req: AuthRequest, res) => {
     const list = await listGalleryRequestsReceived(req.userId!);
     return sendSuccess(res, 'Gallery requests received', await enrichAndSerialize(list));
+  }),
+];
+
+export const galleryRequestsAccepted = [
+  ...fullUserGuard,
+  asyncHandler(async (req: AuthRequest, res) => {
+    const list = await listGalleryRequestsAccepted(req.userId!);
+    return sendSuccess(res, 'Accepted gallery requests', await enrichAndSerialize(list));
+  }),
+];
+
+export const galleryRequestsGranted = [
+  ...fullUserGuard,
+  asyncHandler(async (req: AuthRequest, res) => {
+    const list = await listGalleryRequestsGrantedByMe(req.userId!);
+    return sendSuccess(res, 'Gallery requests I accepted', await enrichAndSerialize(list));
   }),
 ];
 

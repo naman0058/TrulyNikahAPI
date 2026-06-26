@@ -1,8 +1,9 @@
 import { Prisma } from '@prisma/client';
 import prisma from '../lib/prisma';
-import { heightStringToInches } from '../utils/helpers';
+import { heightStringToInches, inchesToHeightString } from '../utils/helpers';
 import { AppError } from '../utils/errors';
-import { ALLOWED_PARTNER_FIELDS } from '../utils/validation';
+import { ALLOWED_PARTNER_FIELDS, normalizeFilterField } from '../utils/validation';
+import { getPartnerPreferenceFieldOptions } from '../constants/partnerPreferenceOptions';
 
 function emptyToNull(value: unknown): string | null {
   if (value == null || value === '') return null;
@@ -63,20 +64,78 @@ export function buildPartnerPreferencePayload(
   return data;
 }
 
+const PARTNER_ID_FIELDS = [
+  'marital_status',
+  'highest_education',
+  'mother_tounge',
+  'sect',
+  'cast',
+  'occupation',
+  'country',
+  'state',
+  'city',
+  'annual_income',
+] as const;
+
+export function normalizePartnerPreferenceBody(body: Record<string, unknown>): Record<string, unknown> {
+  const out = { ...body };
+  for (const field of PARTNER_ID_FIELDS) {
+    if (!(field in out)) continue;
+    const normalized = normalizeFilterField(out[field]);
+    out[field] = normalized ?? null;
+  }
+  return out;
+}
+
+function formatStoredHeight(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (/^\d+$/.test(trimmed)) {
+    return inchesToHeightString(parseInt(trimmed, 10));
+  }
+  return value;
+}
+
+function formatPreferenceForClient(pref: {
+  age_from: number | null;
+  age_to: number | null;
+  height_from: string | null;
+  height_to: string | null;
+  [key: string]: unknown;
+}) {
+  return {
+    ...pref,
+    height_from: formatStoredHeight(pref.height_from),
+    height_to: formatStoredHeight(pref.height_to),
+  };
+}
+
+export async function getPartnerPreferencesForUser(userId: bigint) {
+  const pref = await prisma.partnerPreference.findFirst({ where: { user_id: userId } });
+  return {
+    preferences: pref ? formatPreferenceForClient(pref as never) : null,
+    field_options: getPartnerPreferenceFieldOptions(),
+  };
+}
+
 export async function upsertPartnerPreference(userId: bigint, body: Record<string, unknown>) {
-  const data = buildPartnerPreferencePayload(body);
+  const normalized = normalizePartnerPreferenceBody(body);
+  const data = buildPartnerPreferencePayload(normalized);
   const existing = await prisma.partnerPreference.findFirst({ where: { user_id: userId } });
 
   if (Object.keys(data).length === 0) {
-    if (existing) return existing;
-    return prisma.partnerPreference.create({ data: { user_id: userId } });
+    if (existing) return formatPreferenceForClient(existing as never);
+    const created = await prisma.partnerPreference.create({ data: { user_id: userId } });
+    return formatPreferenceForClient(created as never);
   }
 
   if (existing) {
-    return prisma.partnerPreference.update({ where: { id: existing.id }, data });
+    const updated = await prisma.partnerPreference.update({ where: { id: existing.id }, data });
+    return formatPreferenceForClient(updated as never);
   }
 
-  return prisma.partnerPreference.create({
+  const created = await prisma.partnerPreference.create({
     data: { user_id: userId, ...(data as Omit<Prisma.PartnerPreferenceUncheckedCreateInput, 'user_id'>) },
   });
+  return formatPreferenceForClient(created as never);
 }

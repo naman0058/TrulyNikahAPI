@@ -34,6 +34,52 @@ export function pickBody<T extends Record<string, unknown>>(body: Record<string,
   return out as T;
 }
 
+function isFilterScalar(value: unknown): value is string | number | boolean {
+  return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean';
+}
+
+function isFilterValue(value: unknown): boolean {
+  if (isFilterScalar(value)) return true;
+  if (Array.isArray(value)) return value.length > 0 && value.every(isFilterScalar);
+  return false;
+}
+
+/** Normalize ID/filter fields — mobile apps often send numeric IDs */
+export function normalizeFilterField(value: unknown): string | string[] | undefined {
+  if (value == null || value === '') return undefined;
+  if (Array.isArray(value)) {
+    const cleaned = value.map((item) => String(item).trim()).filter(Boolean);
+    return cleaned.length ? cleaned : undefined;
+  }
+  const single = String(value).trim();
+  return single || undefined;
+}
+
+export function normalizeSearchBody(body: Record<string, unknown>): Record<string, unknown> {
+  const idFields = [
+    'sect',
+    'cast',
+    'country',
+    'state',
+    'city',
+    'marital_status',
+    'highest_education',
+    'employed_in',
+    'mother_tounge',
+    'annual_income',
+  ] as const;
+
+  const out = { ...body };
+  for (const field of idFields) {
+    if (field in out) {
+      const normalized = normalizeFilterField(out[field]);
+      if (normalized === undefined) delete out[field];
+      else out[field] = normalized;
+    }
+  }
+  return out;
+}
+
 /** Reusable express-validator chains */
 export const V = {
   positiveIntParam: (name: string, label = name) =>
@@ -60,6 +106,19 @@ export const V = {
     body(name).trim().notEmpty().withMessage(`${label} is required`),
 
   optionalString: (name: string) => body(name).optional().isString().trim(),
+
+  /** Accepts string, number, or array (mobile sends numeric IDs for sect/cast/country) */
+  optionalFilterValue: (name: string) =>
+    body(name)
+      .optional()
+      .custom((value) => isFilterValue(value))
+      .withMessage(`${name} must be a string, number, or array of strings/numbers`),
+
+  optionalStringOrStringArray: (name: string) =>
+    body(name)
+      .optional()
+      .custom((value) => isFilterValue(value))
+      .withMessage(`${name} must be a string, number, or array of strings/numbers`),
 
   email: (name = 'email') =>
     body(name).trim().isEmail().normalizeEmail().withMessage('Valid email is required'),
@@ -138,12 +197,21 @@ export const SEARCH_BODY_FIELDS = [
   'name',
   'age_from',
   'age_to',
-  'country',
-  'state',
-  'city',
+  'age_range',
+  'height_from',
+  'height_to',
   'marital_status',
   'sect',
   'cast',
+  'country',
+  'state',
+  'city',
+  'highest_education',
+  'employed_in',
+  'mother_tounge',
+  'income_min_lakh',
+  'income_max_lakh',
+  'annual_income',
   'page',
   'limit',
 ] as const;

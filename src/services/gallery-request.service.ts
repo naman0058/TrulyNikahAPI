@@ -188,6 +188,110 @@ export async function listGalleryRequestsReceived(userId: bigint): Promise<Galle
   return attachUsers(rows, 'fromUser', 'from_user_id');
 }
 
+/** Outgoing gallery requests that were accepted — users whose gallery you can view */
+export async function listGalleryRequestsAccepted(userId: bigint): Promise<GalleryRequestWithUser[]> {
+  const rows = await fetchGalleryRequestsAccepted(userId);
+  return attachUsers(rows, 'toUser', 'to_user_id');
+}
+
+async function fetchGalleryRequestsAccepted(userId: bigint): Promise<GalleryRequestRow[]> {
+  try {
+    const rows = await prisma.galleryRequest.findMany({
+      where: { from_user_id: userId, status: 'accepted' },
+      orderBy: { updated_at: 'desc' },
+      select: {
+        id: true,
+        from_user_id: true,
+        to_user_id: true,
+        status: true,
+        created_at: true,
+        updated_at: true,
+      },
+    });
+    return rows.map((row) => ({
+      ...row,
+      status: String(row.status),
+    }));
+  } catch (err) {
+    if (!isSchemaMismatchError(err)) throw err;
+
+    try {
+      const rows = await prisma.$queryRawUnsafe<
+        Array<{
+          id: bigint | number;
+          from_user_id: bigint | number;
+          to_user_id: bigint | number;
+          status: string;
+          created_at: Date | null;
+          updated_at: Date | null;
+        }>
+      >(
+        `SELECT ${GALLERY_REQUEST_COLUMNS}
+         FROM gallery_requests
+         WHERE from_user_id = ? AND status = 'accepted'
+         ORDER BY updated_at DESC, created_at DESC`,
+        Number(userId)
+      );
+      return rows.map(mapGalleryRow);
+    } catch (rawErr) {
+      if (isMissingGalleryTableError(rawErr)) throw galleryTableSetupError();
+      throw rawErr;
+    }
+  }
+}
+
+/** Incoming gallery requests this user accepted — users who can view their gallery */
+export async function listGalleryRequestsGrantedByMe(userId: bigint): Promise<GalleryRequestWithUser[]> {
+  const rows = await fetchGalleryRequestsGrantedByMe(userId);
+  return attachUsers(rows, 'fromUser', 'from_user_id');
+}
+
+async function fetchGalleryRequestsGrantedByMe(userId: bigint): Promise<GalleryRequestRow[]> {
+  try {
+    const rows = await prisma.galleryRequest.findMany({
+      where: { to_user_id: userId, status: 'accepted' },
+      orderBy: { updated_at: 'desc' },
+      select: {
+        id: true,
+        from_user_id: true,
+        to_user_id: true,
+        status: true,
+        created_at: true,
+        updated_at: true,
+      },
+    });
+    return rows.map((row) => ({
+      ...row,
+      status: String(row.status),
+    }));
+  } catch (err) {
+    if (!isSchemaMismatchError(err)) throw err;
+
+    try {
+      const rows = await prisma.$queryRawUnsafe<
+        Array<{
+          id: bigint | number;
+          from_user_id: bigint | number;
+          to_user_id: bigint | number;
+          status: string;
+          created_at: Date | null;
+          updated_at: Date | null;
+        }>
+      >(
+        `SELECT ${GALLERY_REQUEST_COLUMNS}
+         FROM gallery_requests
+         WHERE to_user_id = ? AND status = 'accepted'
+         ORDER BY updated_at DESC, created_at DESC`,
+        Number(userId)
+      );
+      return rows.map(mapGalleryRow);
+    } catch (rawErr) {
+      if (isMissingGalleryTableError(rawErr)) throw galleryTableSetupError();
+      throw rawErr;
+    }
+  }
+}
+
 async function findGalleryRequestPair(fromUserId: bigint, toUserId: bigint): Promise<GalleryRequestRow | null> {
   try {
     const row = await prisma.galleryRequest.findUnique({

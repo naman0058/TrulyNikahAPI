@@ -12,6 +12,7 @@ const router = Router();
 // Field option reference (enums for app forms)
 router.get('/reference/field-options', reference.getFieldOptions);
 router.get('/reference/field-options/:key', reference.getFieldOptionByKey);
+router.get('/reference/search-filters', publicCtrl.getSearchFilters);
 
 // Public reference & CMS
 router.get('/locations/countries', publicCtrl.getCountries);
@@ -54,6 +55,7 @@ router.patch('/me/about', profile.updateAbout);
 router.patch('/me/education', profile.updateEducation);
 router.patch('/me/contact-location', profile.updateContactLocation);
 router.patch('/me/privacy', profile.updatePrivacy);
+router.get('/me/partner-preferences', profile.getPartnerPreferences);
 router.post('/me/partner-preferences', profile.updatePartnerPreferences);
 router.post('/me/family', profile.updateFamily);
 router.post('/me/religious', profile.updateReligious);
@@ -83,6 +85,8 @@ router.delete('/blocks/:userId', social.unblockUserHandler);
 router.get('/blocks', social.getBlockedUsers);
 router.get('/gallery-requests/sent', social.galleryRequestsSent);
 router.get('/gallery-requests/received', social.galleryRequestsReceived);
+router.get('/gallery-requests/accepted', social.galleryRequestsAccepted);
+router.get('/gallery-requests/granted', social.galleryRequestsGranted);
 router.post('/gallery-requests/:userId', social.sendGalleryRequestHandler);
 router.post('/gallery-requests/:userId/accept', social.acceptGalleryRequestHandler);
 router.post('/gallery-requests/:userId/reject', social.rejectGalleryRequestHandler);

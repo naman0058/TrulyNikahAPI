@@ -6,6 +6,11 @@ const jsonOk = (description: string): OpenAPIV3.ResponseObject => ({
   content: { 'application/json': { schema: { $ref: S('ApiResponse') } } },
 });
 
+const jsonOkSchema = (description: string, schemaRef: string): OpenAPIV3.ResponseObject => ({
+  description,
+  content: { 'application/json': { schema: { $ref: schemaRef } } },
+});
+
 const jsonErr = (): Record<string, OpenAPIV3.ResponseObject> => ({
   '400': { description: 'Validation or bad request' },
   '401': { description: 'Authentication required' },
@@ -22,6 +27,8 @@ type OpOpts = {
   security?: OpenAPIV3.SecurityRequirementObject[];
   desc?: string;
   detail?: string;
+  /** Full response schema ref (overrides generic ApiResponse) */
+  responseSchema?: string;
   params?: OpenAPIV3.ParameterObject[];
   query?: OpenAPIV3.ParameterObject[];
   body?: string;
@@ -68,23 +75,32 @@ function buildParams(opts?: OpOpts): OpenAPIV3.ParameterObject[] | undefined {
 }
 
 function opGet(tag: string, summary: string, opts?: OpOpts): OpenAPIV3.OperationObject {
+  const okResponse = opts?.responseSchema
+    ? jsonOkSchema(opts.desc ?? summary, opts.responseSchema)
+    : jsonOk(opts?.desc ?? summary);
+
   return {
     tags: [tag],
     summary,
+    description: opts?.detail,
     security: opts?.security,
     parameters: buildParams(opts),
-    responses: { '200': jsonOk(opts?.desc ?? summary), ...jsonErr() },
+    responses: { '200': okResponse, ...jsonErr() },
   };
 }
 
 function opPost(tag: string, summary: string, opts?: OpOpts): OpenAPIV3.OperationObject {
+  const okResponse = opts?.responseSchema
+    ? jsonOkSchema(opts.desc ?? summary, opts.responseSchema)
+    : jsonOk(opts?.desc ?? summary);
+
   const operation: OpenAPIV3.OperationObject = {
     tags: [tag],
     summary,
     description: opts?.detail,
     security: opts?.security,
     parameters: buildParams(opts),
-    responses: { '200': jsonOk(opts?.desc ?? summary), '201': jsonOk('Created'), ...jsonErr() },
+    responses: { '200': okResponse, '201': okResponse, ...jsonErr() },
   };
   if (opts?.multipart) {
     operation.requestBody = {
@@ -262,6 +278,18 @@ export function buildSwaggerPaths(): OpenAPIV3.PathsObject {
         desc: 'Example keys: profile_visibility, gender, user_status, trust_badge_status, policy_type, plan_validity_type, photo_field',
       }),
     },
+    '/reference/search-filters': {
+      get: opGet('Public', 'Get search filter options (no request body)', {
+        detail:
+          '**No parameters required.** Call this once to load the Filters screen dropdowns/chips.\n\n' +
+          'After the user picks filters, send their choices in **`POST /search`** (Discovery tag).\n\n' +
+          'Related lookups:\n' +
+          '- Sect/caste IDs → `GET /castes`\n' +
+          '- Country IDs → `GET /locations/countries`',
+        responseSchema: S('SearchFiltersResponse'),
+        desc: 'Returns age buckets, marital status, mother tongue, education, employed-in, income brackets, and height format hints',
+      }),
+    },
 
     '/dashboard': { get: opGet('Discovery', 'Dashboard feed', { security: bearer }) },
     '/profiles/best-matches': {
@@ -282,7 +310,18 @@ export function buildSwaggerPaths(): OpenAPIV3.PathsObject {
         params: [pathParam('memberId', 'Member ID e.g. NM-12345678', 'NM-12345678')],
       }),
     },
-    '/search': { post: opPost('Discovery', 'Search profiles', { security: bearer, body: S('SearchProfilesRequest') }) },
+    '/search': {
+      post: opPost('Discovery', 'Search profiles with selected filters', {
+        security: bearer,
+        body: S('SearchProfilesRequest'),
+        responseSchema: S('SearchProfilesResponse'),
+        detail:
+          '**This is the search API.** Send the filter values the user selected on the Filters screen.\n\n' +
+          'All body fields are optional — combine any filters. Multi-select fields accept a string or string array.\n\n' +
+          'Load allowed values first via `GET /reference/search-filters`, `GET /castes`, and `GET /locations/countries`.',
+        desc: 'Matching profiles (opposite gender, excludes blocked users)',
+      }),
+    },
 
     '/me/profile': { get: opGet('Profile', 'Get full profile', { security: bearer }) },
     '/me/profile/completion': { get: opGet('Profile', 'Profile completion percentage', { security: bearer }) },
@@ -301,7 +340,23 @@ export function buildSwaggerPaths(): OpenAPIV3.PathsObject {
           'Or call `GET /reference/field-options/profile_visibility`.',
       }),
     },
-    '/me/partner-preferences': { post: opPost('Profile', 'Save partner preferences', { security: bearer, body: S('PartnerPreferencesRequest') }) },
+    '/me/partner-preferences': {
+      get: opGet('Profile', 'Get partner preferences and all field options', {
+        security: bearer,
+        responseSchema: S('PartnerPreferencesGetResponse'),
+        detail:
+          'Returns saved preferences (may be partial/null) plus `field_options` for every dropdown. ' +
+          'All POST fields are optional — send only what the user fills in each step.',
+      }),
+      post: opPost('Profile', 'Save partner preferences (partial update)', {
+        security: bearer,
+        body: S('PartnerPreferencesRequest'),
+        bodyRequired: false,
+        detail:
+          '**All fields optional.** Send only fields the user filled. Omitted fields are left unchanged. ' +
+          'Send `null` or empty string to clear a field. ID fields accept string or number.',
+      }),
+    },
     '/me/family': { post: opPost('Profile', 'Save family information', { security: bearer, body: S('FamilyInformationRequest') }) },
     '/me/religious': { post: opPost('Profile', 'Save religious and lifestyle info', { security: bearer, body: S('ReligiousInfoRequest') }) },
     '/me/trust-badge': {
@@ -388,6 +443,12 @@ export function buildSwaggerPaths(): OpenAPIV3.PathsObject {
     },
     '/gallery-requests/sent': { get: opGet('Social', 'Gallery requests I sent', { security: bearer }) },
     '/gallery-requests/received': { get: opGet('Social', 'Gallery requests I received', { security: bearer }) },
+    '/gallery-requests/accepted': {
+      get: opGet('Social', 'Gallery access granted to me — users whose gallery I can view', { security: bearer }),
+    },
+    '/gallery-requests/granted': {
+      get: opGet('Social', 'Gallery requests I accepted — users who can view my gallery', { security: bearer }),
+    },
     '/gallery-requests/{userId}': {
       post: opPost('Social', 'Send gallery access request to another user', {
         security: bearer,

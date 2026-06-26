@@ -5,8 +5,9 @@ import { sendSuccess, serialize, enrichAndSerialize } from '../utils/response';
 import { AppError, ErrorCode } from '../utils/errors';
 import { PUBLIC_USER_SELECT, heightStringToInches, routeParam, getProfileCompletion } from '../utils/helpers';
 import { enrichUserForClient, enrichSafeUser } from '../services/user-display.service';
-import { upsertPartnerPreference } from '../services/partner-preference.service';
+import { upsertPartnerPreference, getPartnerPreferencesForUser } from '../services/partner-preference.service';
 import { findNotificationsForUser } from '../services/notification.service';
+import { mapProfileManagerToPublicUrls, toPublicMediaUrl } from '../middleware/upload';
 import { allowedValues, validationMessage } from '../constants/fieldOptions';
 import {
   ALLOWED_FAMILY_FIELDS,
@@ -133,6 +134,14 @@ export const updatePrivacy = [
   }),
 ];
 
+export const getPartnerPreferences = [
+  ...fullUserGuard,
+  asyncHandler(async (req: AuthRequest, res) => {
+    const payload = await getPartnerPreferencesForUser(req.userId!);
+    return sendSuccess(res, 'Partner preferences fetched', await enrichAndSerialize(payload));
+  }),
+];
+
 export const updatePartnerPreferences = [
   ...fullUserGuard,
   validateBody(
@@ -148,6 +157,12 @@ export const updatePartnerPreferences = [
               return Number.isInteger(n) && n >= 18 && n <= 100;
             })
             .withMessage(`${field} must be an integer between 18 and 100`);
+        }
+        if (field === 'height_from' || field === 'height_to') {
+          return body(field).optional({ values: 'null' });
+        }
+        if (['sect', 'cast', 'country', 'state', 'city'].includes(field)) {
+          return V.optionalFilterValue(field);
         }
         return body(field).optional({ values: 'null' }).isString().trim();
       }),
@@ -334,8 +349,16 @@ export const getMyProfile = [
     if (!user) throw AppError.notFound('User not found');
 
     const { password: _, remember_token: __, ...safe } = user;
+    const enriched = (await enrichSafeUser(safe)) as Record<string, unknown>;
+    if (enriched.profileManager && typeof enriched.profileManager === 'object') {
+      enriched.profileManager = mapProfileManagerToPublicUrls(enriched.profileManager as Record<string, unknown>);
+    }
+    if (enriched.profile_picture) {
+      enriched.profile_picture = toPublicMediaUrl(String(enriched.profile_picture));
+    }
+
     return sendSuccess(res, 'Profile fetched', {
-      user: serialize(await enrichSafeUser(safe)),
+      user: serialize(enriched),
       completion: getProfileCompletion(safe as never),
     });
   }),

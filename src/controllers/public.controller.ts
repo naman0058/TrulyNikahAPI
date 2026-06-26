@@ -11,7 +11,9 @@ import {
   stateExists,
 } from '../services/location.service';
 import { body, query } from 'express-validator';
-import { V, CONTACT_ENQUIRY_FIELDS, SEARCH_BODY_FIELDS } from '../utils/validation';
+import { V, CONTACT_ENQUIRY_FIELDS, SEARCH_BODY_FIELDS, normalizeSearchBody } from '../utils/validation';
+import { searchProfiles as runProfileSearch, SearchFiltersInput } from '../services/search.service';
+import { getSearchFilterOptions } from '../constants/searchFilters';
 
 export const getCountries = asyncHandler(async (_req, res) => {
   const countries = await prisma.country.findMany({ orderBy: { name: 'asc' } });
@@ -262,65 +264,37 @@ export const viewProfile = [
   }),
 ];
 
+export const getSearchFilters = asyncHandler(async (_req, res) => {
+  return sendSuccess(res, 'Search filter options for mobile app', getSearchFilterOptions());
+});
+
 export const searchProfiles = [
   ...fullUserGuard,
   validateBody([...SEARCH_BODY_FIELDS], [
     body('name').optional().isString().trim().isLength({ min: 1, max: 255 }).withMessage('name must be 1-255 characters'),
     body('age_from').optional().isInt({ min: 18, max: 100 }).withMessage('age_from must be 18-100'),
     body('age_to').optional().isInt({ min: 18, max: 100 }).withMessage('age_to must be 18-100'),
+    body('age_range').optional().isString().trim().isLength({ min: 1, max: 20 }),
+    body('height_from').optional(),
+    body('height_to').optional(),
+    body('income_min_lakh').optional().isFloat({ min: 0 }).withMessage('income_min_lakh must be >= 0'),
+    body('income_max_lakh').optional().isFloat({ min: 0 }).withMessage('income_max_lakh must be >= 0'),
     body('page').optional().isInt({ min: 1 }).withMessage('page must be a positive integer'),
     body('limit').optional().isInt({ min: 1, max: 50 }).withMessage('limit must be 1-50'),
-    body('country').optional().isString(),
-    body('state').optional().isString(),
-    body('city').optional().isString(),
-    body('marital_status').optional().isString(),
-    body('sect').optional().isString(),
-    body('cast').optional().isString(),
+    V.optionalStringOrStringArray('marital_status'),
+    V.optionalFilterValue('sect'),
+    V.optionalFilterValue('cast'),
+    V.optionalFilterValue('country'),
+    V.optionalFilterValue('state'),
+    V.optionalFilterValue('city'),
+    V.optionalStringOrStringArray('highest_education'),
+    V.optionalStringOrStringArray('employed_in'),
+    V.optionalStringOrStringArray('mother_tounge'),
+    V.optionalStringOrStringArray('annual_income'),
   ]),
   asyncHandler(async (req: AuthRequest, res) => {
-    const user = req.user!;
-    const oppositeGender = user.gender === 'male' ? 'female' : 'male';
-    const { name, age_from, age_to, country, state, city, marital_status, sect, cast, page = 1, limit = 20 } = req.body;
-
-    const pageNum = Math.max(1, parseInt(String(page), 10) || 1);
-    const limitNum = Math.min(50, Math.max(1, parseInt(String(limit), 10) || 20));
-    const skip = (pageNum - 1) * limitNum;
-
-    const where: Record<string, unknown> = {
-      gender: oppositeGender,
-      id: { not: user.id },
-      status: { in: ['verified', 'premium', 'pending'] },
-    };
-
-    if (name && String(name).trim()) {
-      where.name = { contains: String(name).trim() };
-    }
-    if (country) where.country = String(country);
-    if (state) where.state = String(state);
-    if (city) where.city = String(city);
-    if (marital_status) where.marital_status = marital_status;
-    if (sect) where.sect = String(sect);
-    if (cast) where.cast = String(cast);
-
-    let results = await prisma.user.findMany({
-      where: where as never,
-      select: PUBLIC_USER_SELECT,
-      skip,
-      take: limitNum * 2,
-      orderBy: { created_at: 'desc' },
-    });
-
-    if (age_from || age_to) {
-      const from = age_from ? parseInt(String(age_from), 10) : 18;
-      const to = age_to ? parseInt(String(age_to), 10) : 100;
-      results = results.filter((p) => {
-        const age = parseInt(p.age ?? '0', 10);
-        return age >= from && age <= to;
-      });
-    }
-
-    const paginated = results.slice(0, limitNum);
-
-    return sendSuccess(res, 'Search results', await enrichAndSerialize(paginated), 200, paginationMeta(pageNum, limitNum, results.length));
+    const filters = normalizeSearchBody(req.body) as SearchFiltersInput;
+    const { results, page, limit, total } = await runProfileSearch(req.user!, filters);
+    return sendSuccess(res, 'Search results', await enrichAndSerialize(results), 200, paginationMeta(page, limit, total));
   }),
 ];

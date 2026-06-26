@@ -54,3 +54,14 @@ export const PROFILE_IMAGE_FIELDS = [
 ] as const;
 
 export type ProfileImageField = (typeof PROFILE_IMAGE_FIELDS)[number];
+
+/** Convert profileManager storage paths to full public media URLs */
+export function mapProfileManagerToPublicUrls(manager: Record<string, unknown>): Record<string, unknown> {
+  const out = { ...manager };
+  for (const field of PROFILE_IMAGE_FIELDS) {
+    if (field in out) {
+      out[field] = toPublicMediaUrl(out[field] as string | null);
+    }
+  }
+  return out;
+}
