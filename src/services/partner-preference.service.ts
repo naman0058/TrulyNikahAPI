@@ -110,6 +110,18 @@ function formatPreferenceForClient(pref: {
   };
 }
 
+export function formatPartnerPreferencesList(
+  prefs: Array<{
+    age_from: number | null;
+    age_to: number | null;
+    height_from: string | null;
+    height_to: string | null;
+    [key: string]: unknown;
+  }>
+) {
+  return prefs.map((pref) => formatPreferenceForClient(pref));
+}
+
 export async function getPartnerPreferencesForUser(userId: bigint) {
   const pref = await prisma.partnerPreference.findFirst({ where: { user_id: userId } });
   return {

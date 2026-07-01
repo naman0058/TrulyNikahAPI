@@ -1,2 +1,2 @@
 /** Bump when deploying — visible on GET /health as `build`. */
-export const API_BUILD_ID = '2026-06-03-location-fix';
+export const API_BUILD_ID = '2026-07-01-profile-image-url';

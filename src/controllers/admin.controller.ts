@@ -129,7 +129,7 @@ export const listMembers = [
       prisma.user.count({ where: where as never }),
     ]);
 
-    return sendSuccess(res, 'Members fetched', serialize(members), 200, paginationMeta(pageNum, limitNum, total));
+    return sendSuccess(res, 'Members fetched', await enrichAndSerialize(members), 200, paginationMeta(pageNum, limitNum, total));
   }),
 ];
 

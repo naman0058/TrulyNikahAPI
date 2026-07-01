@@ -24,6 +24,16 @@ export function calculateAge(dob: string): number {
   return age;
 }
 
+/** Match Laravel discovery/search — lowercase gender, then return opposite. */
+export function resolveOppositeGender(gender: string | null | undefined): 'male' | 'female' | null {
+  const normalized = String(gender ?? '')
+    .trim()
+    .toLowerCase();
+  if (normalized === 'male') return 'female';
+  if (normalized === 'female') return 'male';
+  return null;
+}
+
 export function isProfileComplete(user: {
   height: string | null;
   country: string | null;

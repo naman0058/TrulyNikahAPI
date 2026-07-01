@@ -4,10 +4,10 @@ import prisma from '../lib/prisma';
 import { sendSuccess, serialize, enrichAndSerialize } from '../utils/response';
 import { AppError, ErrorCode } from '../utils/errors';
 import { PUBLIC_USER_SELECT, heightStringToInches, routeParam, getProfileCompletion } from '../utils/helpers';
-import { enrichUserForClient, enrichSafeUser } from '../services/user-display.service';
+import { enrichUserForClient } from '../services/user-display.service';
 import { upsertPartnerPreference, getPartnerPreferencesForUser } from '../services/partner-preference.service';
 import { findNotificationsForUser } from '../services/notification.service';
-import { mapProfileManagerToPublicUrls, toPublicMediaUrl } from '../middleware/upload';
+import { buildFullProfileResponse, FULL_PROFILE_INCLUDE } from '../services/profile-response.service';
 import { allowedValues, validationMessage } from '../constants/fieldOptions';
 import {
   ALLOWED_FAMILY_FIELDS,
@@ -337,30 +337,12 @@ export const getMyProfile = [
   asyncHandler(async (req: AuthRequest, res) => {
     const user = await prisma.user.findUnique({
       where: { id: req.userId! },
-      include: {
-        profileManager: true,
-        trustBadge: true,
-        partnerPreferences: true,
-        familyInformation: true,
-        religiousInfo: true,
-        subscriptions: { include: { plan: true, variant: true }, orderBy: { created_at: 'desc' }, take: 5 },
-      },
+      include: FULL_PROFILE_INCLUDE,
     });
     if (!user) throw AppError.notFound('User not found');
 
-    const { password: _, remember_token: __, ...safe } = user;
-    const enriched = (await enrichSafeUser(safe)) as Record<string, unknown>;
-    if (enriched.profileManager && typeof enriched.profileManager === 'object') {
-      enriched.profileManager = mapProfileManagerToPublicUrls(enriched.profileManager as Record<string, unknown>);
-    }
-    if (enriched.profile_picture) {
-      enriched.profile_picture = toPublicMediaUrl(String(enriched.profile_picture));
-    }
-
-    return sendSuccess(res, 'Profile fetched', {
-      user: serialize(enriched),
-      completion: getProfileCompletion(safe as never),
-    });
+    const payload = await buildFullProfileResponse(user as never);
+    return sendSuccess(res, 'Profile fetched', payload);
   }),
 ];
 

@@ -1,7 +1,7 @@
 import { AuthRequest, asyncHandler, fullUserGuard, validate, validateBody, validateQuery } from '../middleware';
 import prisma from '../lib/prisma';
 import { sendSuccess, serialize, paginationMeta, enrichAndSerialize } from '../utils/response';
-import { PUBLIC_USER_SELECT, maskEmail, maskPhone, routeParam, parseBigIntId } from '../utils/helpers';
+import { PUBLIC_USER_SELECT, routeParam, parseBigIntId } from '../utils/helpers';
 import { AppError } from '../utils/errors';
 import { getBestMatches, getNewProfiles } from '../services/discovery.service';
 import {
@@ -14,6 +14,7 @@ import { body, query } from 'express-validator';
 import { V, CONTACT_ENQUIRY_FIELDS, SEARCH_BODY_FIELDS, normalizeSearchBody } from '../utils/validation';
 import { searchProfiles as runProfileSearch, SearchFiltersInput } from '../services/search.service';
 import { getSearchFilterOptions } from '../constants/searchFilters';
+import { buildFullProfileResponse, FULL_PROFILE_INCLUDE } from '../services/profile-response.service';
 
 export const getCountries = asyncHandler(async (_req, res) => {
   const countries = await prisma.country.findMany({ orderBy: { name: 'asc' } });
@@ -241,7 +242,7 @@ export const viewProfile = [
   asyncHandler(async (req: AuthRequest, res) => {
     const profile = await prisma.user.findFirst({
       where: { member_id: routeParam(req.params.memberId) },
-      include: { profileManager: true, trustBadge: true },
+      include: FULL_PROFILE_INCLUDE,
     });
     if (!profile) throw AppError.notFound('Profile not found');
     if (profile.status === 'deleted' || profile.status === 'block') {
@@ -252,15 +253,8 @@ export const viewProfile = [
       data: { viewer_id: req.userId!, viewed_user_id: profile.id },
     });
 
-    const safe = await enrichAndSerialize({
-      ...profile,
-      password: undefined,
-      remember_token: undefined,
-      contact_number: maskPhone(profile.contact_number ?? ''),
-      email: maskEmail(profile.email),
-    });
-
-    return sendSuccess(res, 'Profile fetched', safe);
+    const payload = await buildFullProfileResponse(profile as never, { maskContact: true });
+    return sendSuccess(res, 'Profile fetched', payload);
   }),
 ];
 

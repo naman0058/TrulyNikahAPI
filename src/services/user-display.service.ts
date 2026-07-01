@@ -1,4 +1,5 @@
 import prisma from '../lib/prisma';
+import { toPublicMediaUrl } from '../middleware/upload';
 import { sanitizeUser } from './auth.service';
 
 export const DISPLAY_NOT_AVAILABLE = 'not available';
@@ -142,6 +143,98 @@ function applyDisplayNames(record: Record<string, unknown>, maps: NameMaps): voi
   }
 }
 
+function isUserLikeRecord(record: Record<string, unknown>): boolean {
+  if (record.id == null) return false;
+  if (typeof record.member_id === 'string' && record.member_id.trim()) return true;
+  return 'name' in record && ('gender' in record || 'age' in record || 'phone_verified' in record);
+}
+
+function collectUserIdsFromValue(value: unknown, userIds: Set<string>, seen: WeakSet<object>): void {
+  if (value == null || typeof value !== 'object') return;
+  if (value instanceof Date) return;
+  if (seen.has(value as object)) return;
+  seen.add(value as object);
+
+  if (Array.isArray(value)) {
+    for (const item of value) collectUserIdsFromValue(item, userIds, seen);
+    return;
+  }
+
+  const record = value as Record<string, unknown>;
+  if (isUserLikeRecord(record)) {
+    userIds.add(String(record.id));
+  }
+
+  for (const nested of Object.values(record)) {
+    if (nested && typeof nested === 'object') collectUserIdsFromValue(nested, userIds, seen);
+  }
+}
+
+async function loadProfileImageMap(userIds: Set<string>): Promise<Map<string, string | null>> {
+  if (!userIds.size) return new Map();
+
+  const managers = await prisma.profileManager.findMany({
+    where: { user_id: { in: [...userIds].map((id) => BigInt(id)) } },
+    select: { user_id: true, profile_image: true },
+  });
+
+  return new Map(managers.map((row) => [row.user_id.toString(), toPublicMediaUrl(row.profile_image)]));
+}
+
+function resolveProfileImageForUser(
+  record: Record<string, unknown>,
+  imageMap: Map<string, string | null>
+): string | null {
+  if (record.profileManager && typeof record.profileManager === 'object') {
+    const manager = record.profileManager as Record<string, unknown>;
+    const fromManager = toPublicMediaUrl(manager.profile_image as string | null | undefined);
+    if (fromManager) return fromManager;
+  }
+
+  const fromPicture = toPublicMediaUrl(record.profile_picture as string | null | undefined);
+  if (fromPicture) return fromPicture;
+
+  return imageMap.get(String(record.id)) ?? null;
+}
+
+function applyProfileImagesToValue(
+  value: unknown,
+  imageMap: Map<string, string | null>,
+  seen: WeakSet<object>
+): void {
+  if (value == null || typeof value !== 'object') return;
+  if (value instanceof Date) return;
+  if (seen.has(value as object)) return;
+  seen.add(value as object);
+
+  if (Array.isArray(value)) {
+    for (const item of value) applyProfileImagesToValue(item, imageMap, seen);
+    return;
+  }
+
+  const record = value as Record<string, unknown>;
+  if (isUserLikeRecord(record)) {
+    record.profile_image = resolveProfileImageForUser(record, imageMap);
+  }
+
+  for (const nested of Object.values(record)) {
+    if (nested && typeof nested === 'object') applyProfileImagesToValue(nested, imageMap, seen);
+  }
+}
+
+/** Add top-level `profile_image` (full public URL) on every user object in a payload. */
+export async function attachProfileImages<T>(payload: T): Promise<T> {
+  if (payload == null) return payload;
+
+  const userIds = new Set<string>();
+  collectUserIdsFromValue(payload, userIds, new WeakSet());
+  if (!userIds.size) return payload;
+
+  const imageMap = await loadProfileImageMap(userIds);
+  applyProfileImagesToValue(payload, imageMap, new WeakSet());
+  return payload;
+}
+
 function cloneAndEnrich(value: unknown, maps: NameMaps, seen: WeakMap<object, unknown>): unknown {
   if (value == null || typeof value !== 'object') return value;
   if (value instanceof Date) return value;
@@ -165,7 +258,7 @@ function cloneAndEnrich(value: unknown, maps: NameMaps, seen: WeakMap<object, un
   return out;
 }
 
-/** Recursively add *_name fields anywhere country/state/city/sect/cast IDs appear in a payload. */
+/** Recursively add *_name fields and profile_image on user objects in a payload. */
 export async function enrichPayload<T>(payload: T): Promise<T> {
   if (payload == null) return payload;
 
@@ -173,10 +266,14 @@ export async function enrichPayload<T>(payload: T): Promise<T> {
   collectIdsFromValue(payload, bucket, new WeakSet());
 
   const hasIds = Object.values(bucket).some((set) => set.size > 0);
-  if (!hasIds) return payload;
+  let enriched: T = payload;
 
-  const maps = await loadNameMaps(bucket);
-  return cloneAndEnrich(payload, maps, new WeakMap()) as T;
+  if (hasIds) {
+    const maps = await loadNameMaps(bucket);
+    enriched = cloneAndEnrich(payload, maps, new WeakMap()) as T;
+  }
+
+  return attachProfileImages(enriched);
 }
 
 /** Sanitize user + add display names (auth / profile updates). */

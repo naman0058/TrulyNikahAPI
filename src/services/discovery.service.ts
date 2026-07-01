@@ -1,10 +1,6 @@
 import prisma from '../lib/prisma';
-import { PUBLIC_USER_SELECT } from '../utils/helpers';
+import { PUBLIC_USER_SELECT, resolveOppositeGender } from '../utils/helpers';
 import { User } from '@prisma/client';
-
-function oppositeGender(gender: string | null | undefined): string {
-  return gender === 'male' ? 'female' : 'male';
-}
 
 function buildIgnoredIds(userId: bigint) {
   return prisma.ignore.findMany({
@@ -27,11 +23,12 @@ export async function getBestMatches(user: User, limit = 12) {
   const excludeIds = await excludedUserIds(user.id);
   const pref = await prisma.partnerPreference.findFirst({ where: { user_id: user.id } });
 
+  const oppositeGender = resolveOppositeGender(user.gender);
   const where: Record<string, unknown> = {
-    gender: oppositeGender(user.gender),
     id: { notIn: excludeIds },
     status: { in: ['verified', 'premium'] },
   };
+  if (oppositeGender) where.gender = oppositeGender;
 
   if (pref) {
     if (pref.country) where.country = pref.country;
@@ -65,12 +62,15 @@ export async function getBestMatches(user: User, limit = 12) {
 export async function getNewProfiles(user: User, limit = 12) {
   const excludeIds = await excludedUserIds(user.id);
 
+  const oppositeGender = resolveOppositeGender(user.gender);
+  const where: Record<string, unknown> = {
+    id: { notIn: excludeIds },
+    status: { in: ['verified', 'premium', 'pending'] },
+  };
+  if (oppositeGender) where.gender = oppositeGender;
+
   return prisma.user.findMany({
-    where: {
-      gender: oppositeGender(user.gender),
-      id: { notIn: excludeIds },
-      status: { in: ['verified', 'premium', 'pending'] },
-    },
+    where: where as never,
     select: PUBLIC_USER_SELECT,
     take: limit,
     orderBy: { created_at: 'desc' },

@@ -393,6 +393,12 @@ export const swaggerSchemas: Record<string, OpenAPIV3.SchemaObject> = {
       occupation: { type: 'string', example: 'Software Engineer' },
       employed_in: { type: 'string', example: 'private' },
       about_us: { type: 'string', example: 'Assalamualaikum...' },
+      profile_image: {
+        type: 'string',
+        nullable: true,
+        example: 'https://api.trulynikah.com/media/profile_images/photo.jpg',
+        description: 'Main profile photo — full public URL',
+      },
       status: { type: 'string', example: 'verified' },
       profile_visibility: { type: 'string', example: 'everyone' },
       created_at: { type: 'string', format: 'date-time' },
@@ -558,6 +564,70 @@ export const swaggerSchemas: Record<string, OpenAPIV3.SchemaObject> = {
           },
         },
       },
+    },
+  },
+  FullProfilePayload: {
+    type: 'object',
+    description: 'Full profile payload returned by GET /me/profile and GET /profiles/{memberId}',
+    properties: {
+      user: {
+        type: 'object',
+        description: 'Full user with profileManager, trustBadge, partnerPreferences, familyInformation, religiousInfo',
+        properties: {
+          member_id: { type: 'string', example: 'NM-12345678' },
+          name: { type: 'string' },
+          email: { type: 'string', example: 'a***@g***.com', description: 'Masked when viewing another member' },
+          contact_number: { type: 'string', example: '+91*****12', description: 'Masked when viewing another member' },
+          profile_image: {
+            type: 'string',
+            nullable: true,
+            example: 'https://api.trulynikah.com/media/profile_images/photo.jpg',
+            description: 'Main profile photo — full public URL',
+          },
+          profileManager: {
+            type: 'object',
+            properties: {
+              profile_image: { type: 'string', example: 'https://api.trulynikah.com/media/profile_images/photo.png' },
+              profile_image1: { type: 'string', nullable: true },
+            },
+          },
+          partnerPreferences: { type: 'array', items: { type: 'object' } },
+          familyInformation: { type: 'array', items: { type: 'object' } },
+          religiousInfo: { type: 'array', items: { type: 'object' } },
+          trustBadge: { type: 'object', nullable: true },
+          subscriptions: {
+            type: 'array',
+            description: 'Only included on GET /me/profile (own profile)',
+            items: { type: 'object' },
+          },
+        },
+      },
+      completion: {
+        type: 'object',
+        properties: {
+          percentage: { type: 'integer', example: 85 },
+          complete: { type: 'boolean' },
+          filledCount: { type: 'integer' },
+          totalFields: { type: 'integer' },
+          missingFields: { type: 'array', items: { type: 'string' } },
+        },
+      },
+    },
+  },
+  MyProfileResponse: {
+    type: 'object',
+    properties: {
+      success: { type: 'boolean', example: true },
+      message: { type: 'string', example: 'Profile fetched' },
+      data: { $ref: '#/components/schemas/FullProfilePayload' },
+    },
+  },
+  MemberProfileResponse: {
+    type: 'object',
+    properties: {
+      success: { type: 'boolean', example: true },
+      message: { type: 'string', example: 'Profile fetched' },
+      data: { $ref: '#/components/schemas/FullProfilePayload' },
     },
   },
   FamilyInformationRequest: {

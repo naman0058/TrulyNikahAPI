@@ -305,9 +305,13 @@ export function buildSwaggerPaths(): OpenAPIV3.PathsObject {
       }),
     },
     '/profiles/{memberId}': {
-      get: opGet('Discovery', 'View member profile', {
+      get: opGet('Discovery', 'View member profile (full data, masked contact)', {
         security: bearer,
         params: [pathParam('memberId', 'Member ID e.g. NM-12345678', 'NM-12345678')],
+        responseSchema: S('MemberProfileResponse'),
+        detail:
+          'Same structure as GET /me/profile (`user` + `completion`). Email/phone are masked. ' +
+          'Subscription history is hidden. Profile view is recorded.',
       }),
     },
     '/search': {
@@ -318,12 +322,20 @@ export function buildSwaggerPaths(): OpenAPIV3.PathsObject {
         detail:
           '**This is the search API.** Send the filter values the user selected on the Filters screen.\n\n' +
           'All body fields are optional — combine any filters. Multi-select fields accept a string or string array.\n\n' +
+          '`name` matches profile **name** or **member_id** (e.g. `Naman`, `NM-73054340`).\n\n' +
+          'Other filters accept numeric IDs **or** display labels (e.g. sect `Sunni` or `1`, country `India` or `76`).\n\n' +
+          'Search does **not** filter by gender. Excludes blocked users and yourself.\n\n' +
           'Load allowed values first via `GET /reference/search-filters`, `GET /castes`, and `GET /locations/countries`.',
-        desc: 'Matching profiles (opposite gender, excludes blocked users)',
+        desc: 'Matching profiles (all genders, excludes blocked users)',
       }),
     },
 
-    '/me/profile': { get: opGet('Profile', 'Get full profile', { security: bearer }) },
+    '/me/profile': {
+      get: opGet('Profile', 'Get full profile', {
+        security: bearer,
+        responseSchema: S('MyProfileResponse'),
+      }),
+    },
     '/me/profile/completion': { get: opGet('Profile', 'Profile completion percentage', { security: bearer }) },
     '/me/basic': { patch: opPatch('Profile', 'Update basic details (name, gender)', { security: bearer, body: S('UpdateBasicRequest') }) },
     '/me/personal': { patch: opPatch('Profile', 'Update personal details', { security: bearer, body: S('UpdatePersonalRequest') }) },

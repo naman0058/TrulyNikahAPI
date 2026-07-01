@@ -1,7 +1,8 @@
-import { User } from '@prisma/client';
+import { Prisma, User } from '@prisma/client';
 import prisma from '../lib/prisma';
 import { SEARCH_AGE_BUCKETS, SEARCH_INCOME_BRACKETS } from '../constants/searchFilters';
 import { heightStringToInches, PUBLIC_USER_SELECT } from '../utils/helpers';
+import { resolveSearchReferenceFilters } from './search-filter-resolver.service';
 
 const SEARCH_USER_SELECT = {
   ...PUBLIC_USER_SELECT,
@@ -30,10 +31,6 @@ export type SearchFiltersInput = {
   page?: number;
   limit?: number;
 };
-
-function oppositeGender(gender: string | null | undefined): string {
-  return gender === 'male' ? 'female' : 'male';
-}
 
 function toArray(value: string | string[] | undefined): string[] | undefined {
   if (value == null || value === '') return undefined;
@@ -159,33 +156,64 @@ function applyInFilter(where: Record<string, unknown>, field: string, values?: s
   where[field] = values.length === 1 ? values[0] : { in: values };
 }
 
+function isMemberIdKeyword(keyword: string): boolean {
+  return /^NM-/i.test(keyword.trim()) || /^\d{6,}$/.test(keyword.trim());
+}
+
+/** Search name and member_id; each word in the query must match the name. */
+function buildKeywordFilter(keyword: string): Prisma.UserWhereInput {
+  const trimmed = keyword.trim();
+  if (!trimmed) return {};
+
+  if (isMemberIdKeyword(trimmed)) {
+    return {
+      OR: [{ member_id: { contains: trimmed } }, { name: { contains: trimmed } }],
+    };
+  }
+
+  const tokens = trimmed.split(/\s+/).filter(Boolean);
+  if (tokens.length <= 1) {
+    return {
+      OR: [{ name: { contains: trimmed } }, { member_id: { contains: trimmed } }],
+    };
+  }
+
+  return {
+    AND: tokens.map((token) => ({
+      OR: [{ name: { contains: token } }, { member_id: { contains: token } }],
+    })),
+  };
+}
+
 export async function searchProfiles(user: User, filters: SearchFiltersInput) {
   const pageNum = Math.max(1, Number(filters.page) || 1);
   const limitNum = Math.min(50, Math.max(1, Number(filters.limit) || 20));
   const skip = (pageNum - 1) * limitNum;
 
   const excludeIds = await excludedUserIds(user.id);
-  const where: Record<string, unknown> = {
-    gender: oppositeGender(user.gender),
+  const keyword = filters.name?.trim();
+
+  const where: Prisma.UserWhereInput = {
     id: { notIn: excludeIds },
     status: { in: ['verified', 'premium', 'pending'] },
   };
 
-  if (filters.name?.trim()) {
-    where.name = { contains: filters.name.trim() };
+  if (keyword) {
+    Object.assign(where, buildKeywordFilter(keyword));
   }
 
-  applyInFilter(where, 'country', toArray(filters.country));
-  if (filters.state) where.state = String(filters.state);
-  if (filters.city) where.city = String(filters.city);
+  const resolved = await resolveSearchReferenceFilters(filters);
+  applyInFilter(where as Record<string, unknown>, 'country', resolved.country);
+  applyInFilter(where as Record<string, unknown>, 'state', resolved.state);
+  applyInFilter(where as Record<string, unknown>, 'city', resolved.city);
 
   const maritalStatuses = toArray(filters.marital_status);
-  if (maritalStatuses) applyInFilter(where, 'marital_status', expandMaritalStatuses(maritalStatuses));
+  if (maritalStatuses) applyInFilter(where as Record<string, unknown>, 'marital_status', expandMaritalStatuses(maritalStatuses));
 
-  applyInFilter(where, 'sect', toArray(filters.sect));
-  applyInFilter(where, 'cast', toArray(filters.cast));
-  applyInFilter(where, 'highest_education', toArray(filters.highest_education));
-  applyInFilter(where, 'employed_in', toArray(filters.employed_in));
+  applyInFilter(where as Record<string, unknown>, 'sect', resolved.sect);
+  applyInFilter(where as Record<string, unknown>, 'cast', resolved.cast);
+  applyInFilter(where as Record<string, unknown>, 'highest_education', toArray(filters.highest_education));
+  applyInFilter(where as Record<string, unknown>, 'employed_in', toArray(filters.employed_in));
 
   const exactIncome = toArray(filters.annual_income);
   if (exactIncome?.length === 1) {
@@ -212,7 +240,7 @@ export async function searchProfiles(user: User, filters: SearchFiltersInput) {
   const fetchSkip = needsPostFilter ? 0 : skip;
 
   let results = await prisma.user.findMany({
-    where: where as never,
+    where,
     select: SEARCH_USER_SELECT,
     skip: fetchSkip,
     take: fetchSize,
@@ -248,7 +276,7 @@ export async function searchProfiles(user: User, filters: SearchFiltersInput) {
     );
   }
 
-  const total = results.length;
+  const total = needsPostFilter ? results.length : await prisma.user.count({ where });
   const paginated = needsPostFilter ? results.slice(skip, skip + limitNum) : results;
 
   return { results: paginated, page: pageNum, limit: limitNum, total };
