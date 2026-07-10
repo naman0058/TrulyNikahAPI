@@ -3,6 +3,7 @@ import * as publicCtrl from '../controllers/public.controller';
 import * as profile from '../controllers/profile.controller';
 import * as social from '../controllers/social.controller';
 import * as message from '../controllers/message.controller';
+import * as messageRequest from '../controllers/message-request.controller';
 import * as payment from '../controllers/payment.controller';
 import * as upload from '../controllers/upload.controller';
 import * as reference from '../controllers/reference.controller';
@@ -74,6 +75,7 @@ router.post('/interests/:userId/accept', social.acceptInterest);
 router.delete('/interests/:interestId', social.removeInterest);
 router.get('/interests/received', social.interestsReceived);
 router.get('/interests/sent', social.interestsSent);
+router.get('/interests/accepted', social.interestsAccepted);
 router.post('/shortlists', social.addShortlist);
 router.get('/shortlists', social.getShortlist);
 router.delete('/shortlists/:userId', social.removeShortlist);
@@ -95,8 +97,18 @@ router.post('/reports', social.reportProfile);
 router.get('/profiles/views/by-me', social.profileViewsByMe);
 router.get('/profiles/views/of-me', social.profileViewsOfMe);
 
-// Messaging
+// Messaging — request flow then chat
+router.post('/message-requests/:userId', messageRequest.sendMessageRequestHandler);
+router.get('/message-requests/sent', messageRequest.messageRequestsSent);
+router.get('/message-requests/received', messageRequest.messageRequestsReceived);
+router.get('/message-requests/accepted', messageRequest.messageRequestsAccepted);
+router.get('/message-requests/rejected', messageRequest.messageRequestsRejected);
+router.post('/message-requests/:userId/accept', messageRequest.acceptMessageRequestHandler);
+router.post('/message-requests/:userId/reject', messageRequest.rejectMessageRequestHandler);
+
 router.get('/conversations', message.getConversations);
+router.get('/conversations/unread', message.getUnreadMessages);
+router.get('/presence', message.getPresence);
 router.get('/conversations/:userId/messages', message.getMessages);
 router.post('/conversations/messages', message.sendMessage);
 router.post('/conversations/:userId/read', message.markRead);

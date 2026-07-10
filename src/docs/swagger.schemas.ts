@@ -685,6 +685,17 @@ export const swaggerSchemas: Record<string, OpenAPIV3.SchemaObject> = {
     required: ['report_user_id'],
     properties: { report_user_id: { type: 'integer', example: 42 } },
   },
+  MessageRequestBody: {
+    type: 'object',
+    properties: {
+      message: {
+        type: 'string',
+        maxLength: 500,
+        example: 'Assalamualaikum, I would like to connect with you.',
+        description: 'Optional intro note with the chat request',
+      },
+    },
+  },
   SendMessageRequest: {
     type: 'object',
     required: ['receiver_id', 'message'],

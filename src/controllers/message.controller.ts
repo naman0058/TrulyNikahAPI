@@ -1,51 +1,55 @@
 import { body } from 'express-validator';
-import { AuthRequest, asyncHandler, authenticate, requireProfileComplete, validate, validateBody } from '../middleware';
+import { AuthRequest, asyncHandler, fullUserGuard, validate, validateBody } from '../middleware';
 import prisma from '../lib/prisma';
 import { sendSuccess, serialize, enrichAndSerialize } from '../utils/response';
-import { PUBLIC_USER_SELECT, routeParam } from '../utils/helpers';
+import { routeParam } from '../utils/helpers';
 import { AppError } from '../utils/errors';
 import { MESSAGE_SEND_FIELDS, V } from '../utils/validation';
-
-const messageGuard = [authenticate, requireProfileComplete];
-
-async function hasMutualInterest(userA: bigint, userB: bigint): Promise<boolean> {
-  const [aToB, bToA] = await Promise.all([
-    prisma.interestReceived.findFirst({
-      where: { from_user_id: userA, to_user_id: userB, acceptance: true },
-    }),
-    prisma.interestReceived.findFirst({
-      where: { from_user_id: userB, to_user_id: userA, acceptance: true },
-    }),
-  ]);
-  return Boolean(aToB || bToA);
-}
+import {
+  assertCanExchangeMessages,
+  listConversationThreads,
+  listUnreadMessageThreads,
+} from '../services/message.service';
+import { emitToUser, getPresenceForUsers } from '../socket/presence';
 
 export const getConversations = [
-  ...messageGuard,
+  ...fullUserGuard,
   asyncHandler(async (req: AuthRequest, res) => {
-    const userId = req.userId!;
+    const threads = await listConversationThreads(req.userId!);
+    return sendSuccess(res, 'Conversations fetched', await enrichAndSerialize(threads));
+  }),
+];
 
-    const sentAccepted = await prisma.interestReceived.findMany({
-      where: { from_user_id: userId, acceptance: true },
-      include: { toUser: { select: PUBLIC_USER_SELECT } },
-    });
+export const getUnreadMessages = [
+  ...fullUserGuard,
+  asyncHandler(async (req: AuthRequest, res) => {
+    const threads = await listUnreadMessageThreads(req.userId!);
+    return sendSuccess(res, 'Unread messages fetched', await enrichAndSerialize(threads));
+  }),
+];
 
-    const receivedAccepted = await prisma.interestReceived.findMany({
-      where: { to_user_id: userId, acceptance: true },
-      include: { fromUser: { select: PUBLIC_USER_SELECT } },
-    });
+export const getPresence = [
+  ...fullUserGuard,
+  asyncHandler(async (req: AuthRequest, res) => {
+    const raw = String(req.query.user_ids ?? req.query.userIds ?? '').trim();
+    if (!raw) throw AppError.badRequest('user_ids query parameter is required', { user_ids: ['Provide comma-separated user IDs'] });
 
-    return sendSuccess(res, 'Conversations fetched', await enrichAndSerialize({ sentAccepted, receivedAccepted }));
+    const userIds = raw
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean);
+
+    const presence = [...(await getPresenceForUsers(userIds)).values()];
+    return sendSuccess(res, 'Presence fetched', presence);
   }),
 ];
 
 export const getMessages = [
-  ...messageGuard,
+  ...fullUserGuard,
   validate([V.positiveIntParam('userId', 'userId')]),
   asyncHandler(async (req: AuthRequest, res) => {
     const otherId = BigInt(routeParam(req.params.userId));
-    const allowed = await hasMutualInterest(req.userId!, otherId);
-    if (!allowed) throw AppError.forbidden('Messaging allowed only after mutual interest acceptance');
+    await assertCanExchangeMessages(req.userId!, otherId);
 
     const messages = await prisma.message.findMany({
       where: {
@@ -62,15 +66,19 @@ export const getMessages = [
 ];
 
 export const sendMessage = [
-  ...messageGuard,
+  ...fullUserGuard,
   validateBody([...MESSAGE_SEND_FIELDS], [
     V.positiveIntBody('receiver_id'),
-    body('message').trim().notEmpty().withMessage('message is required').isLength({ max: 5000 }).withMessage('message must be at most 5000 characters'),
+    body('message')
+      .trim()
+      .notEmpty()
+      .withMessage('message is required')
+      .isLength({ max: 5000 })
+      .withMessage('message must be at most 5000 characters'),
   ]),
   asyncHandler(async (req: AuthRequest, res) => {
     const receiverId = BigInt(req.body.receiver_id);
-    const allowed = await hasMutualInterest(req.userId!, receiverId);
-    if (!allowed) throw AppError.forbidden('Messaging allowed only after mutual interest acceptance');
+    await assertCanExchangeMessages(req.userId!, receiverId);
 
     const message = await prisma.message.create({
       data: {
@@ -80,19 +88,27 @@ export const sendMessage = [
       },
     });
 
+    emitToUser(receiverId.toString(), 'message:new', serialize(message));
+
     return sendSuccess(res, 'Message sent', serialize(message), 201);
   }),
 ];
 
 export const markRead = [
-  ...messageGuard,
+  ...fullUserGuard,
   validate([V.positiveIntParam('userId', 'userId')]),
   asyncHandler(async (req: AuthRequest, res) => {
     const senderId = BigInt(routeParam(req.params.userId));
-    await prisma.message.updateMany({
+    const result = await prisma.message.updateMany({
       where: { sender_id: senderId, receiver_id: req.userId!, read_at: null },
       data: { read_at: new Date() },
     });
-    return sendSuccess(res, 'Messages marked as read');
+
+    emitToUser(senderId.toString(), 'message:read', {
+      reader_id: req.userId!.toString(),
+      marked_count: result.count,
+    });
+
+    return sendSuccess(res, 'Messages marked as read', { marked_count: result.count });
   }),
 ];

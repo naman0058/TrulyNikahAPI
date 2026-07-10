@@ -91,6 +91,24 @@ export const interestsSent = [
   }),
 ];
 
+export const interestsAccepted = [
+  ...fullUserGuard,
+  asyncHandler(async (req: AuthRequest, res) => {
+    const list = await prisma.interestReceived.findMany({
+      where: {
+        acceptance: true,
+        OR: [{ from_user_id: req.userId! }, { to_user_id: req.userId! }],
+      },
+      include: {
+        fromUser: { select: PUBLIC_USER_SELECT },
+        toUser: { select: PUBLIC_USER_SELECT },
+      },
+      orderBy: { updated_at: 'desc' },
+    });
+    return sendSuccess(res, 'Accepted interests', await enrichAndSerialize(list));
+  }),
+];
+
 export const addShortlist = [
   ...fullUserGuard,
   validateBody(['shortlisted_user_id'], [V.positiveIntBody('shortlisted_user_id')]),

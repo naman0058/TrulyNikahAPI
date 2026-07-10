@@ -52,6 +52,7 @@ model User {
   profile_visibility String    @default("everyone") @db.VarChar(255)
   remember_token     String?   @db.VarChar(100)
   last_login_at      DateTime?
+  last_seen_at       DateTime?
   created_at         DateTime  @default(now())
   updated_at         DateTime  @updatedAt
 
@@ -78,6 +79,8 @@ model User {
   reportsReceived    ReportMember[]     @relation("ReportTarget")
   galleryRequestsSent     GalleryRequest[] @relation("GalleryRequestFrom")
   galleryRequestsReceived GalleryRequest[] @relation("GalleryRequestTo")
+  messageRequestsSent     MessageRequest[] @relation("MessageRequestFrom")
+  messageRequestsReceived MessageRequest[] @relation("MessageRequestTo")
 
   @@map("users")
 }
@@ -237,6 +240,21 @@ model GalleryRequest {
 
   @@unique([from_user_id, to_user_id])
   @@map("gallery_requests")
+}
+
+model MessageRequest {
+  id           BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  from_user_id BigInt    @db.UnsignedBigInt
+  to_user_id   BigInt    @db.UnsignedBigInt
+  message      String?   @db.Text
+  status       String    @default("pending") @db.VarChar(20)
+  created_at   DateTime? @default(now())
+  updated_at   DateTime?
+  fromUser     User      @relation("MessageRequestFrom", fields: [from_user_id], references: [id], onDelete: Cascade)
+  toUser       User      @relation("MessageRequestTo", fields: [to_user_id], references: [id], onDelete: Cascade)
+
+  @@unique([from_user_id, to_user_id])
+  @@map("message_requests")
 }
 
 model ReportMember {

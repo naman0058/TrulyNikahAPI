@@ -1,14 +1,16 @@
+import http from 'http';
 import config from './config';
 import { createApp } from './app';
 import prisma from './lib/prisma';
+import { initSocketServer } from './socket/presence';
 
-// Serialize BigInt in JSON responses
 (BigInt.prototype as unknown as { toJSON: () => number }).toJSON = function () {
   return Number(this);
 };
 
 async function bootstrap() {
   const app = createApp();
+  const server = http.createServer(app);
 
   try {
     await prisma.$connect();
@@ -18,7 +20,10 @@ async function bootstrap() {
     process.exit(1);
   }
 
-  app.listen(config.port, () => {
+  initSocketServer(server);
+  console.log('[Socket] Socket.io enabled at /socket.io');
+
+  server.listen(config.port, () => {
     console.log(`[API] TrulyNikah API listening on port ${config.port}`);
     console.log(`[API] Base URL: ${config.appUrl}${config.apiPrefix}`);
     console.log(`[API] Environment: ${config.env}`);

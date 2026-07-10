@@ -419,6 +419,12 @@ export function buildSwaggerPaths(): OpenAPIV3.PathsObject {
     },
     '/interests/received': { get: opGet('Social', 'Interests received', { security: bearer }) },
     '/interests/sent': { get: opGet('Social', 'Interests sent', { security: bearer }) },
+    '/interests/accepted': {
+      get: opGet('Social', 'Accepted interests', {
+        security: bearer,
+        desc: 'All accepted interests involving you (sent or received), with fromUser and toUser profiles',
+      }),
+    },
     '/shortlists': {
       get: opGet('Social', 'Get shortlist', { security: bearer }),
       post: opPost('Social', 'Add to shortlist', { security: bearer, body: S('ShortlistRequest') }),
@@ -492,7 +498,45 @@ export function buildSwaggerPaths(): OpenAPIV3.PathsObject {
     '/profiles/views/by-me': { get: opGet('Social', 'Profiles viewed by me', { security: bearer }) },
     '/profiles/views/of-me': { get: opGet('Social', 'Who viewed my profile', { security: bearer }) },
 
-    '/conversations': { get: opGet('Messaging', 'List conversations', { security: bearer }) },
+    '/message-requests/sent': { get: opGet('Messaging', 'Message requests I sent', { security: bearer }) },
+    '/message-requests/received': { get: opGet('Messaging', 'Message requests I received', { security: bearer }) },
+    '/message-requests/accepted': { get: opGet('Messaging', 'Accepted message requests', { security: bearer }) },
+    '/message-requests/rejected': { get: opGet('Messaging', 'Rejected message requests', { security: bearer }) },
+    '/message-requests/{userId}': {
+      post: opPost('Messaging', 'Send message request', {
+        security: bearer,
+        params: [pathParam('userId', 'User to request chat with', 42)],
+        body: S('MessageRequestBody'),
+      }),
+    },
+    '/message-requests/{userId}/accept': {
+      post: opPost('Messaging', 'Accept message request', {
+        security: bearer,
+        noBody: true,
+        params: [pathParam('userId', 'Requester user ID', 42)],
+      }),
+    },
+    '/message-requests/{userId}/reject': {
+      post: opPost('Messaging', 'Reject message request', {
+        security: bearer,
+        noBody: true,
+        params: [pathParam('userId', 'Requester user ID', 42)],
+      }),
+    },
+
+    '/conversations': {
+      get: opGet('Messaging', 'List chat conversations (accepted requests)', {
+        security: bearer,
+        desc: 'Each thread includes user, unread_count, latest_message, and presence (online / last_seen_ago)',
+      }),
+    },
+    '/conversations/unread': { get: opGet('Messaging', 'All unread message threads', { security: bearer }) },
+    '/presence': {
+      get: opGet('Messaging', 'Online/offline status for users', {
+        security: bearer,
+        query: [queryParam('user_ids', 'Comma-separated user IDs e.g. 42,55,1305', { type: 'string', example: '42,55' })],
+      }),
+    },
     '/conversations/{userId}/messages': {
       get: opGet('Messaging', 'Get message thread', {
         security: bearer,
