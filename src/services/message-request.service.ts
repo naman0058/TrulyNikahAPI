@@ -3,6 +3,7 @@ import prisma from '../lib/prisma';
 import { PUBLIC_USER_SELECT } from '../utils/helpers';
 import { AppError } from '../utils/errors';
 import { assertSocialTarget } from './social.service';
+import { ensureMessageRequestSchema } from './message-request-schema';
 
 export type MessageRequestRow = {
   id: bigint;
@@ -20,6 +21,15 @@ export type MessageRequestWithUser = MessageRequestRow & {
 };
 
 const COLUMNS = 'id, from_user_id, to_user_id, message, status, created_at, updated_at';
+const COLUMNS_WITHOUT_MESSAGE = 'id, from_user_id, to_user_id, status, created_at, updated_at';
+
+function isUnknownMessageColumnError(err: unknown): boolean {
+  if (err instanceof Error) {
+    const msg = err.message.toLowerCase();
+    return msg.includes("unknown column 'message'") || msg.includes('unknown column `message`');
+  }
+  return false;
+}
 
 function isSchemaMismatchError(err: unknown): boolean {
   if (err instanceof Prisma.PrismaClientKnownRequestError) {
@@ -96,7 +106,8 @@ async function attachUsers(
 
 async function queryRowsRaw(
   sql: string,
-  params: (string | number)[]
+  params: (string | number)[],
+  columns = COLUMNS
 ): Promise<MessageRequestRow[]> {
   try {
     const rows = await prisma.$queryRawUnsafe<
@@ -104,15 +115,18 @@ async function queryRowsRaw(
         id: bigint | number;
         from_user_id: bigint | number;
         to_user_id: bigint | number;
-        message: string | null;
+        message?: string | null;
         status: string;
         created_at: Date | null;
         updated_at: Date | null;
       }>
-    >(sql, ...params);
+    >(sql.replace('__COLUMNS__', columns), ...params);
     return rows.map(mapRow);
   } catch (err) {
     if (isMissingTableError(err)) throw tableSetupError();
+    if (isUnknownMessageColumnError(err) && columns === COLUMNS) {
+      return queryRowsRaw(sql, params, COLUMNS_WITHOUT_MESSAGE);
+    }
     throw err;
   }
 }
@@ -128,7 +142,7 @@ async function fetchByDirection(direction: 'sent' | 'received', userId: bigint):
   } catch (err) {
     if (!isSchemaMismatchError(err)) throw err;
     return queryRowsRaw(
-      `SELECT ${COLUMNS} FROM message_requests WHERE ${column} = ? ORDER BY created_at DESC`,
+      `SELECT __COLUMNS__ FROM message_requests WHERE ${column} = ? ORDER BY created_at DESC`,
       [Number(userId)]
     );
   }
@@ -150,7 +164,7 @@ async function fetchByStatus(
   } catch (err) {
     if (!isSchemaMismatchError(err)) throw err;
     return queryRowsRaw(
-      `SELECT ${COLUMNS}
+      `SELECT __COLUMNS__
        FROM message_requests
        WHERE status = ? AND (from_user_id = ? OR to_user_id = ?)
        ORDER BY updated_at DESC, created_at DESC`,
@@ -171,18 +185,22 @@ function attachBothUsers(rows: MessageRequestRow[]): Promise<MessageRequestWithU
 }
 
 export async function listMessageRequestsSent(userId: bigint) {
+  await ensureMessageRequestSchema();
   return attachUsers(await fetchByDirection('sent', userId), 'toUser', 'to_user_id');
 }
 
 export async function listMessageRequestsReceived(userId: bigint) {
+  await ensureMessageRequestSchema();
   return attachUsers(await fetchByDirection('received', userId), 'fromUser', 'from_user_id');
 }
 
 export async function listMessageRequestsAccepted(userId: bigint) {
+  await ensureMessageRequestSchema();
   return attachBothUsers(await fetchByStatus(userId, 'accepted'));
 }
 
 export async function listMessageRequestsRejected(userId: bigint) {
+  await ensureMessageRequestSchema();
   return attachBothUsers(await fetchByStatus(userId, 'rejected'));
 }
 
@@ -195,7 +213,7 @@ async function findPair(fromUserId: bigint, toUserId: bigint): Promise<MessageRe
   } catch (err) {
     if (!isSchemaMismatchError(err)) throw err;
     const rows = await queryRowsRaw(
-      `SELECT ${COLUMNS} FROM message_requests WHERE from_user_id = ? AND to_user_id = ? LIMIT 1`,
+      `SELECT __COLUMNS__ FROM message_requests WHERE from_user_id = ? AND to_user_id = ? LIMIT 1`,
       [Number(fromUserId), Number(toUserId)]
     );
     return rows[0] ?? null;
@@ -211,7 +229,7 @@ async function findPending(fromUserId: bigint, toUserId: bigint): Promise<Messag
   } catch (err) {
     if (!isSchemaMismatchError(err)) throw err;
     const rows = await queryRowsRaw(
-      `SELECT ${COLUMNS}
+      `SELECT __COLUMNS__
        FROM message_requests
        WHERE from_user_id = ? AND to_user_id = ? AND status = 'pending'
        LIMIT 1`,
@@ -236,13 +254,24 @@ async function insertRequest(fromUserId: bigint, toUserId: bigint, note?: string
     if (!isSchemaMismatchError(err)) throw err;
     if (isMissingTableError(err)) throw tableSetupError();
 
-    await prisma.$executeRawUnsafe(
-      `INSERT INTO message_requests (from_user_id, to_user_id, message, status, created_at)
-       VALUES (?, ?, ?, 'pending', NOW())`,
-      Number(fromUserId),
-      Number(toUserId),
-      note?.trim() || null
-    );
+    try {
+      await prisma.$executeRawUnsafe(
+        `INSERT INTO message_requests (from_user_id, to_user_id, message, status, created_at)
+         VALUES (?, ?, ?, 'pending', NOW())`,
+        Number(fromUserId),
+        Number(toUserId),
+        note?.trim() || null
+      );
+    } catch (insertErr) {
+      if (!isUnknownMessageColumnError(insertErr)) throw insertErr;
+      await prisma.$executeRawUnsafe(
+        `INSERT INTO message_requests (from_user_id, to_user_id, status, created_at)
+         VALUES (?, ?, 'pending', NOW())`,
+        Number(fromUserId),
+        Number(toUserId)
+      );
+    }
+
     const created = await findPair(fromUserId, toUserId);
     if (!created) throw AppError.internal('Failed to create message request');
     return created;
@@ -263,13 +292,14 @@ async function updateStatus(id: bigint, status: 'pending' | 'accepted' | 'reject
       status,
       Number(id)
     );
-    const rows = await queryRowsRaw(`SELECT ${COLUMNS} FROM message_requests WHERE id = ? LIMIT 1`, [Number(id)]);
+    const rows = await queryRowsRaw(`SELECT __COLUMNS__ FROM message_requests WHERE id = ? LIMIT 1`, [Number(id)]);
     if (!rows[0]) throw AppError.notFound('Message request not found');
     return rows[0];
   }
 }
 
 export async function sendMessageRequest(fromUserId: bigint, toUserId: bigint, note?: string) {
+  await ensureMessageRequestSchema();
   await assertSocialTarget(fromUserId, toUserId);
 
   const existing = await findPair(fromUserId, toUserId);
@@ -300,12 +330,14 @@ export async function sendMessageRequest(fromUserId: bigint, toUserId: bigint, n
 }
 
 export async function acceptMessageRequest(ownerUserId: bigint, fromUserId: bigint) {
+  await ensureMessageRequestSchema();
   const request = await findPending(fromUserId, ownerUserId);
   if (!request) throw AppError.notFound('Message request not found');
   return updateStatus(request.id, 'accepted');
 }
 
 export async function rejectMessageRequest(ownerUserId: bigint, fromUserId: bigint) {
+  await ensureMessageRequestSchema();
   const request = await findPending(fromUserId, ownerUserId);
   if (!request) throw AppError.notFound('Message request not found');
   return updateStatus(request.id, 'rejected');
@@ -313,6 +345,7 @@ export async function rejectMessageRequest(ownerUserId: bigint, fromUserId: bigi
 
 /** Chat allowed when an accepted message request exists in either direction. */
 export async function hasAcceptedMessageAccess(userA: bigint, userB: bigint): Promise<boolean> {
+  await ensureMessageRequestSchema();
   try {
     const access = await prisma.messageRequest.findFirst({
       where: {
@@ -327,18 +360,22 @@ export async function hasAcceptedMessageAccess(userA: bigint, userB: bigint): Pr
     return Boolean(access);
   } catch (err) {
     if (!isSchemaMismatchError(err)) throw err;
-    const rows = await queryRowsRaw(
+    const rows = await prisma.$queryRawUnsafe<Array<{ id: bigint | number }>>(
       `SELECT id FROM message_requests
        WHERE status = 'accepted'
          AND ((from_user_id = ? AND to_user_id = ?) OR (from_user_id = ? AND to_user_id = ?))
        LIMIT 1`,
-      [Number(userA), Number(userB), Number(userB), Number(userA)]
+      Number(userA),
+      Number(userB),
+      Number(userB),
+      Number(userA)
     );
     return rows.length > 0;
   }
 }
 
 export async function getAcceptedChatPartnerIds(userId: bigint): Promise<bigint[]> {
+  await ensureMessageRequestSchema();
   try {
     const rows = await prisma.messageRequest.findMany({
       where: { status: 'accepted', OR: [{ from_user_id: userId }, { to_user_id: userId }] },
@@ -351,14 +388,19 @@ export async function getAcceptedChatPartnerIds(userId: bigint): Promise<bigint[
     ].map((id) => BigInt(id));
   } catch (err) {
     if (!isSchemaMismatchError(err)) throw err;
-    const rows = await queryRowsRaw(
+    const rows = await prisma.$queryRawUnsafe<
+      Array<{ from_user_id: bigint | number; to_user_id: bigint | number }>
+    >(
       `SELECT from_user_id, to_user_id FROM message_requests
        WHERE status = 'accepted' AND (from_user_id = ? OR to_user_id = ?)`,
-      [Number(userId), Number(userId)]
+      Number(userId),
+      Number(userId)
     );
     return [
       ...new Set(
-        rows.map((row) => (row.from_user_id === userId ? row.to_user_id : row.from_user_id).toString())
+        rows.map((row) =>
+          (BigInt(row.from_user_id) === userId ? BigInt(row.to_user_id) : BigInt(row.from_user_id)).toString()
+        )
       ),
     ].map((id) => BigInt(id));
   }
