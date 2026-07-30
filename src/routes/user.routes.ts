@@ -115,6 +115,7 @@ router.post('/conversations/:userId/read', message.markRead);
 
 // Payments
 router.post('/payments/razorpay/order', payment.createOrder);
+router.get('/payments/razorpay/checkout', payment.razorpayCheckoutPage);
 router.post('/payments/razorpay/verify', payment.verifyPayment);
 router.get('/payments/history', payment.paymentHistory);
 router.get('/payments/subscription/active', payment.getActiveSubscription);

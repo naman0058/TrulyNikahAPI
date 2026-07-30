@@ -710,6 +710,33 @@ export const swaggerSchemas: Record<string, OpenAPIV3.SchemaObject> = {
     properties: {
       amount: { type: 'number', example: 999, description: 'Amount in INR' },
       plan_id: { type: 'integer', example: 1 },
+      return_url: {
+        type: 'string',
+        example: 'trulynikah://payment-success',
+        description: 'Optional app deep link or HTTPS URL — user is redirected here after successful payment in WebView',
+      },
+    },
+  },
+  RazorpayOrderResponseData: {
+    type: 'object',
+    properties: {
+      order_id: { type: 'string', example: 'order_xxx' },
+      amount: { type: 'integer', example: 99900, description: 'Amount in paise' },
+      amount_inr: { type: 'number', example: 999 },
+      currency: { type: 'string', example: 'INR' },
+      plan_id: { type: 'integer', nullable: true, example: 1 },
+      key: { type: 'string', example: 'rzp_test_xxx' },
+      payment_link: {
+        type: 'string',
+        example: 'https://api.trulynikah.com/api/v1/payments/razorpay/checkout?t=...',
+        description: 'Open this URL in WebView to complete payment',
+      },
+      payment_url: {
+        type: 'string',
+        example: 'https://api.trulynikah.com/api/v1/payments/razorpay/checkout?t=...',
+        description: 'Same as payment_link',
+      },
+      return_url: { type: 'string', nullable: true },
     },
   },
   RazorpayVerifyRequest: {

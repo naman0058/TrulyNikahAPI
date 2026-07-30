@@ -271,7 +271,7 @@ export const PROFILE_STEP2_FIELDS = [
   'any_disability',
 ] as const;
 
-export const PAYMENT_CREATE_FIELDS = ['amount', 'plan_id'] as const;
+export const PAYMENT_CREATE_FIELDS = ['amount', 'plan_id', 'return_url'] as const;
 export const PAYMENT_VERIFY_FIELDS = [
   'razorpay_order_id',
   'razorpay_payment_id',

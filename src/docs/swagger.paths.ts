@@ -552,7 +552,23 @@ export function buildSwaggerPaths(): OpenAPIV3.PathsObject {
       }),
     },
 
-    '/payments/razorpay/order': { post: opPost('Payments', 'Create Razorpay order', { security: bearer, body: S('RazorpayOrderRequest') }) },
+    '/payments/razorpay/order': {
+      post: opPost('Payments', 'Create Razorpay order', {
+        security: bearer,
+        body: S('RazorpayOrderRequest'),
+        responseSchema: S('RazorpayOrderResponseData'),
+        detail:
+          'Returns `payment_link` / `payment_url` — open in mobile **WebView** to pay. ' +
+          'Optional `return_url` (app deep link) receives `razorpay_order_id`, `razorpay_payment_id`, `razorpay_signature` after success. ' +
+          'Then call `POST /payments/razorpay/verify` with those values.',
+      }),
+    },
+    '/payments/razorpay/checkout': {
+      get: opGet('Payments', 'Hosted Razorpay checkout (WebView)', {
+        query: [queryParam('t', 'Signed checkout token from create order', { type: 'string', required: true })],
+        desc: 'HTML checkout page — use payment_link from create order; no Bearer token required',
+      }),
+    },
     '/payments/razorpay/verify': { post: opPost('Payments', 'Verify Razorpay payment', { security: bearer, body: S('RazorpayVerifyRequest') }) },
     '/payments/history': { get: opGet('Payments', 'Payment history', { security: bearer }) },
     '/payments/subscription/active': { get: opGet('Payments', 'Get active subscription', { security: bearer }) },
