@@ -12,6 +12,7 @@ import { PAYMENT_CREATE_FIELDS, PAYMENT_VERIFY_FIELDS, V } from '../utils/valida
 import {
   buildCheckoutPageUrl,
   createCheckoutToken,
+  RAZORPAY_CHECKOUT_PAGE_CSP,
   renderRazorpayCheckoutPage,
   verifyCheckoutToken,
 } from '../services/razorpay-checkout.service';
@@ -117,6 +118,7 @@ export const razorpayCheckoutPage = asyncHandler(async (req: Request, res: Respo
     returnUrl: payload.return_url,
   });
 
+  res.setHeader('Content-Security-Policy', RAZORPAY_CHECKOUT_PAGE_CSP);
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.send(html);
 });

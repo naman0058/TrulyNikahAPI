@@ -52,6 +52,19 @@ export function buildCheckoutPageUrl(token: string): string {
   return `${base}?t=${encodeURIComponent(token)}`;
 }
 
+/** Overrides Helmet default CSP on the hosted checkout HTML only (Razorpay script + inline bootstrapping). */
+export const RAZORPAY_CHECKOUT_PAGE_CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' https://checkout.razorpay.com https://cdn.razorpay.com",
+  "script-src-elem 'self' 'unsafe-inline' https://checkout.razorpay.com https://cdn.razorpay.com",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: https:",
+  "font-src 'self' data: https:",
+  "connect-src 'self' https://api.razorpay.com https://lumberjack.razorpay.com https://checkout.razorpay.com",
+  "frame-src https://api.razorpay.com https://checkout.razorpay.com",
+  "child-src https://api.razorpay.com https://checkout.razorpay.com",
+].join('; ');
+
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, '&amp;')
