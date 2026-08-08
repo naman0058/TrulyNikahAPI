@@ -1,7 +1,7 @@
 import { NextFunction, Request, Response } from 'express';
 import { ValidationChain } from 'express-validator';
 import { JsonWebTokenError, TokenExpiredError } from 'jsonwebtoken';
-import { verifyUserToken } from '../lib/jwt';
+import { verifyUserToken, tokenVersionFromPayload } from '../lib/jwt';
 import prisma from '../lib/prisma';
 import { sendError } from '../utils/response';
 import { AppError, ErrorCode } from '../utils/errors';
@@ -48,6 +48,9 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
     const user = await prisma.user.findUnique({ where: { id: BigInt(payload.sub) } });
     if (!user) {
       return sendError(res, 'User not found', 401, { code: ErrorCode.AUTH_INVALID });
+    }
+    if (tokenVersionFromPayload(payload) !== user.api_token_version) {
+      return sendError(res, 'Session ended. Please login again.', 401, { code: ErrorCode.AUTH_INVALID });
     }
     req.user = user;
     req.userId = user.id;

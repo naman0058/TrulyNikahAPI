@@ -53,6 +53,16 @@ function buildCorsOrigins(): string[] {
   return [...set];
 }
 
+function parseJwtExpiresInSeconds(raw: string): number {
+  const trimmed = raw.trim();
+  const match = /^(\d+)([smhdw])$/i.exec(trimmed);
+  if (!match) return 365 * 86400;
+  const n = parseInt(match[1], 10);
+  const unit = match[2].toLowerCase();
+  const mult: Record<string, number> = { s: 1, m: 60, h: 3600, d: 86400, w: 604800 };
+  return n * (mult[unit] ?? 86400);
+}
+
 export const config = {
   env: process.env.NODE_ENV ?? 'development',
   port: parseInt(process.env.PORT ?? '4000', 10),
@@ -63,7 +73,11 @@ export const config = {
   databaseUrl: buildDatabaseUrl(),
   jwt: {
     secret: process.env.JWT_SECRET ?? 'dev-jwt-secret-change-in-production',
-    expiresIn: process.env.JWT_EXPIRES_IN ?? '7d',
+    /** Access token lifetime — use long value for mobile (e.g. 365d); refresh extends without re-login */
+    expiresIn: process.env.JWT_EXPIRES_IN ?? '365d',
+    expiresInSeconds: parseJwtExpiresInSeconds(process.env.JWT_EXPIRES_IN ?? '365d'),
+    /** Allow POST /auth/refresh with an expired JWT up to this many days after exp */
+    refreshGraceDays: parseInt(process.env.JWT_REFRESH_GRACE_DAYS ?? '365', 10),
     adminSecret: process.env.ADMIN_JWT_SECRET ?? 'dev-admin-secret-change-in-production',
     adminExpiresIn: process.env.ADMIN_JWT_EXPIRES_IN ?? '1d',
   },

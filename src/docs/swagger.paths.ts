@@ -143,8 +143,22 @@ export function buildSwaggerPaths(): OpenAPIV3.PathsObject {
     '/auth/login': {
       post: opPost('Auth', 'Login with email and password', {
         body: S('LoginRequest'),
-        detail: 'Returns JWT and user profile. Alternative: mobile OTP login via `/auth/login/otp/send` and `/auth/login/otp/verify`.',
+        responseSchema: S('LoginResponse'),
+        detail:
+          'Returns long-lived JWT (default 365 days). User stays logged in until **POST /auth/logout**. ' +
+          'If token expires, use **POST /auth/refresh** with the old token (no password/OTP).',
         desc: 'JWT token returned',
+      }),
+    },
+    '/auth/refresh': {
+      post: opPost('Auth', 'Refresh access token (stay logged in)', {
+        body: S('AuthTokenRefreshRequest'),
+        responseSchema: S('LoginResponse'),
+        bodyRequired: false,
+        detail:
+          'Send the current (or recently expired) JWT in `Authorization: Bearer` or body `{ "token": "..." }`. ' +
+          'Returns a new token without login. Fails after logout (session invalidated).',
+        desc: 'New JWT issued',
       }),
     },
     '/auth/login/otp/send': {

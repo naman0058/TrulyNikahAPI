@@ -51,6 +51,7 @@ model User {
   status             UserStatus @default(pending)
   profile_visibility String    @default("everyone") @db.VarChar(255)
   remember_token     String?   @db.VarChar(100)
+  api_token_version  Int       @default(0) @db.UnsignedInt
   last_login_at      DateTime?
   last_seen_at       DateTime?
   created_at         DateTime  @default(now())

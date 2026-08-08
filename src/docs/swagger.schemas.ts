@@ -74,6 +74,13 @@ export const swaggerSchemas: Record<string, OpenAPIV3.SchemaObject> = {
     },
     description: 'Email and password login',
   },
+  AuthTokenRefreshRequest: {
+    type: 'object',
+    description: 'Optional if JWT is sent as Authorization: Bearer',
+    properties: {
+      token: { type: 'string', description: 'Previous access token (may be expired within grace period)' },
+    },
+  },
   MobileLoginOtpSendRequest: {
     type: 'object',
     required: ['contact_number'],
@@ -128,7 +135,13 @@ export const swaggerSchemas: Record<string, OpenAPIV3.SchemaObject> = {
     type: 'object',
     description: 'Returned by email login and mobile OTP login',
     properties: {
-      token: { type: 'string', description: 'JWT Bearer token' },
+      token: { type: 'string', description: 'JWT Bearer token — save securely; valid until logout or expiry' },
+      token_type: { type: 'string', example: 'Bearer' },
+      expires_in: {
+        type: 'integer',
+        example: 31536000,
+        description: 'Access token lifetime in seconds (default ~365 days). Call POST /auth/refresh if expired.',
+      },
       user: {
         type: 'object',
         description: 'User profile with ID fields plus resolved *_name labels',

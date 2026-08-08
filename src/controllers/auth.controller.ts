@@ -10,6 +10,7 @@ import {
   AUTH_MOBILE_OTP_VERIFY_FIELDS,
   AUTH_OTP_FIELDS,
   AUTH_REGISTER_FIELDS,
+  AUTH_TOKEN_REFRESH_FIELDS,
   PROFILE_STEP1_FIELDS,
   PROFILE_STEP2_FIELDS,
   V,
@@ -17,9 +18,11 @@ import {
 import {
   checkAvailability,
   deleteUserAccount,
+  invalidateUserSessions,
   issueInternalToken,
   loginUser,
   loginWithOtp,
+  refreshUserAccessToken,
   registerUser,
   saveProfileStep1,
   saveProfileStep2,
@@ -34,7 +37,7 @@ import { sendSuccess, serialize } from '../utils/response';
 import { hashPassword } from '../lib/bcrypt';
 import prisma from '../lib/prisma';
 import config from '../config';
-import { AppError } from '../utils/errors';
+import { AppError, ErrorCode } from '../utils/errors';
 
 export const register = [
   validateBody([...AUTH_REGISTER_FIELDS], [
@@ -56,7 +59,9 @@ export const register = [
       res,
       'Registration successful. OTP sent to your phone.',
       {
-        token: result.token,
+        token: result.auth.token,
+        token_type: result.auth.token_type,
+        expires_in: result.auth.expires_in,
         user: serialize(await enrichUserForClient(result.user as never)),
         nextStep: 'otp_verification',
       },
@@ -69,7 +74,29 @@ export const login = [
   validateBody([...AUTH_LOGIN_FIELDS], [V.email(), V.nonEmptyString('password', 'password')]),
   asyncHandler(async (req, res) => {
     const result = await loginUser(req.body.email, req.body.password);
-    return sendSuccess(res, 'Login successful', await buildLoginPayload(result.user, result.token));
+    return sendSuccess(res, 'Login successful', await buildLoginPayload(result.user, result.auth));
+  }),
+];
+
+export const refreshToken = [
+  validateBody([...AUTH_TOKEN_REFRESH_FIELDS], [
+    body('token').optional().isString().trim().isLength({ min: 20, max: 4096 }),
+  ]),
+  asyncHandler(async (req, res) => {
+    const header = req.headers.authorization;
+    const raw =
+      (typeof req.body.token === 'string' && req.body.token.trim()) ||
+      (header?.startsWith('Bearer ') ? header.slice(7) : '');
+    if (!raw) {
+      throw AppError.unauthorized('Token required', ErrorCode.AUTH_REQUIRED);
+    }
+    const result = await refreshUserAccessToken(raw);
+    return sendSuccess(res, 'Token refreshed', {
+      token: result.token,
+      token_type: result.token_type,
+      expires_in: result.expires_in,
+      user: serialize(await enrichUserForClient(result.user as never)),
+    });
   }),
 ];
 
@@ -92,7 +119,7 @@ export const verifyLoginOtp = [
         contact_number: ['Use /auth/mobile/verify-otp for new and existing users'],
       });
     }
-    return sendSuccess(res, 'Login successful', await buildLoginPayload(result.user!, result.token));
+    return sendSuccess(res, 'Login successful', await buildLoginPayload(result.user!, result.auth));
   }),
 ];
 
@@ -127,7 +154,7 @@ export const verifyMobileAuthOtpHandler = [
       nextStep: result.nextStep,
       contact_number: result.contact_number,
       phoneVerified: result.phoneVerified,
-      ...(await buildLoginPayload(result.user!, result.token)),
+      ...(await buildLoginPayload(result.user!, result.auth)),
     });
   }),
 ];
@@ -161,7 +188,8 @@ export const me = [
 
 export const logout = [
   authenticate,
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req: AuthRequest, res) => {
+    await invalidateUserSessions(req.userId!);
     return sendSuccess(res, 'Logged out successfully');
   }),
 ];
@@ -185,7 +213,8 @@ export const changePassword = [
   asyncHandler(async (req: AuthRequest, res) => {
     const hashed = await hashPassword(req.body.password);
     await prisma.user.update({ where: { id: req.userId! }, data: { password: hashed } });
-    return sendSuccess(res, 'Password updated successfully');
+    await invalidateUserSessions(req.userId!);
+    return sendSuccess(res, 'Password updated successfully. Please login again.');
   }),
 ];
 
@@ -277,12 +306,16 @@ export const profileStep2 = [
   }),
 ];
 
+import { IssuedAccessToken } from '../services/access-token.service';
+
 async function buildLoginPayload(
   user: Parameters<typeof enrichUserForClient>[0],
-  token: string
+  auth: IssuedAccessToken
 ) {
   return {
-    token,
+    token: auth.token,
+    token_type: auth.token_type,
+    expires_in: auth.expires_in,
     user: serialize(await enrichUserForClient(user as never)),
     onboarding: {
       phoneVerified: user.phone_verified,

@@ -2,7 +2,7 @@ import type { Server as HttpServer } from 'http';
 import { Server, Socket } from 'socket.io';
 import config from '../config';
 import prisma from '../lib/prisma';
-import { verifyUserToken } from '../lib/jwt';
+import { verifyUserToken, tokenVersionFromPayload } from '../lib/jwt';
 
 export type PresenceStatus = {
   user_id: string;
@@ -124,6 +124,14 @@ async function authenticateSocket(socket: Socket): Promise<string> {
   if (!token) throw new Error('Authentication required');
 
   const payload = verifyUserToken(token);
+  const user = await prisma.user.findUnique({
+    where: { id: BigInt(payload.sub) },
+    select: { id: true, api_token_version: true },
+  });
+  if (!user) throw new Error('User not found');
+  if (tokenVersionFromPayload(payload) !== user.api_token_version) {
+    throw new Error('Session ended');
+  }
   return payload.sub;
 }
 

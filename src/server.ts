@@ -3,6 +3,7 @@ import config from './config';
 import { createApp } from './app';
 import prisma from './lib/prisma';
 import { initSocketServer } from './socket/presence';
+import { ensureUserSessionSchema } from './services/user-session-schema';
 
 (BigInt.prototype as unknown as { toJSON: () => number }).toJSON = function () {
   return Number(this);
@@ -15,6 +16,7 @@ async function bootstrap() {
   try {
     await prisma.$connect();
     console.log('[DB] Connected to MySQL');
+    await ensureUserSessionSchema();
   } catch (error) {
     console.error('[DB] Connection failed:', error);
     process.exit(1);
