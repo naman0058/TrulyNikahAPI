@@ -97,37 +97,166 @@ export function renderRazorpayCheckoutPage(opts: {
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <meta name="theme-color" content="#6d6d6d" />
   <title>TrulyNikah Payment</title>
-  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
   <style>
-    body { font-family: system-ui, sans-serif; margin: 0; padding: 24px; background: #f7f7f7; color: #222; }
-    .card { max-width: 420px; margin: 40px auto; background: #fff; padding: 24px; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,.08); }
-    button, .btn { display: block; box-sizing: border-box; width: 100%; padding: 14px; font-size: 16px; border: 0; border-radius: 8px; background: #0d6e3a; color: #fff; cursor: pointer; text-align: center; text-decoration: none; }
-    .btn-secondary { margin-top: 12px; background: #e8f5ee; color: #0d6e3a; }
-    p { line-height: 1.5; }
-    .ok { color: #0d6e3a; font-weight: 600; }
-    .muted { font-size: 14px; color: #555; }
-    .hidden { display: none; }
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #6d6d6d;
+      color: #fff;
+      -webkit-font-smoothing: antialiased;
+    }
+    .screen {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      text-align: center;
+      background: #6d6d6d;
+      transition: opacity 0.35s ease, visibility 0.35s ease;
+    }
+    .screen.is-hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+    .is-hidden { display: none !important; }
+    .screen--light {
+      background: #f4f6f5;
+      color: #1a1a1a;
+    }
+    .brand {
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      opacity: 0.85;
+      margin-bottom: 28px;
+    }
+    .spinner {
+      width: 44px;
+      height: 44px;
+      border: 3px solid rgba(255,255,255,0.25);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+    }
+    .screen--light .spinner {
+      border-color: rgba(13,110,58,0.15);
+      border-top-color: #0d6e3a;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loader-title {
+      margin: 22px 0 6px;
+      font-size: 16px;
+      font-weight: 500;
+    }
+    .loader-sub {
+      margin: 0;
+      font-size: 13px;
+      opacity: 0.65;
+    }
+    .status-title {
+      margin: 0 0 8px;
+      font-size: 20px;
+      font-weight: 600;
+    }
+    .status-msg {
+      margin: 0 0 24px;
+      font-size: 14px;
+      opacity: 0.75;
+      max-width: 280px;
+      line-height: 1.5;
+    }
+    .btn {
+      display: inline-block;
+      min-width: 200px;
+      padding: 14px 24px;
+      font-size: 15px;
+      font-weight: 600;
+      border: 0;
+      border-radius: 10px;
+      background: #0d6e3a;
+      color: #fff;
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .btn--ghost {
+      background: transparent;
+      color: #0d6e3a;
+      border: 1px solid rgba(13,110,58,0.35);
+      margin-top: 12px;
+    }
+    .secure-note {
+      position: fixed;
+      bottom: max(20px, env(safe-area-inset-bottom));
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-size: 11px;
+      opacity: 0.45;
+      color: #fff;
+      pointer-events: none;
+    }
+    .screen--light .secure-note { color: #666; }
   </style>
 </head>
 <body>
-  <div class="card" id="card">
-    <div id="step-pay">
-      <h2>Complete payment</h2>
-      <p>Secure payment powered by Razorpay.</p>
-      <button id="pay-btn" type="button">Pay now</button>
-      <p id="status" class="muted" style="margin-top:16px;"></p>
-    </div>
-    <div id="step-success" class="hidden">
-      <h2 class="ok">Payment successful</h2>
-      <p id="success-msg" class="muted"></p>
-      <a id="open-app" class="btn hidden" href="#">Return to TrulyNikah app</a>
-    </div>
+  <div id="screen-loader" class="screen" aria-live="polite">
+    <div class="brand">TrulyNikah</div>
+    <div class="spinner" role="status" aria-label="Loading"></div>
+    <p class="loader-title">Opening secure checkout</p>
+    <p class="loader-sub">Please wait…</p>
   </div>
+
+  <div id="screen-cancelled" class="screen screen--light is-hidden">
+    <p class="status-title">Payment cancelled</p>
+    <p class="status-msg">You closed the payment window. You can try again when ready.</p>
+    <button type="button" class="btn" id="btn-retry">Try again</button>
+  </div>
+
+  <div id="screen-success" class="screen screen--light is-hidden">
+    <p class="status-title" style="color:#0d6e3a">Payment successful</p>
+    <p class="status-msg" id="success-msg"></p>
+    <a id="open-app" class="btn is-hidden" href="#">Return to app</a>
+  </div>
+
+  <div id="screen-error" class="screen screen--light is-hidden">
+    <p class="status-title">Unable to load checkout</p>
+    <p class="status-msg">Check your connection and try again.</p>
+    <button type="button" class="btn" id="btn-reload">Retry</button>
+  </div>
+
+  <p class="secure-note" id="secure-note">Secured by Razorpay</p>
+
   <script>
     (function () {
       var returnUrl = ${returnUrlJs};
+      var rzpInstance = null;
+      var loaderEl = document.getElementById('screen-loader');
+      var cancelledEl = document.getElementById('screen-cancelled');
+      var successEl = document.getElementById('screen-success');
+      var errorEl = document.getElementById('screen-error');
+      var secureNote = document.getElementById('secure-note');
+
+      function showOnly(el) {
+        [loaderEl, cancelledEl, successEl, errorEl].forEach(function (node) {
+          if (!node) return;
+          node.classList.toggle('is-hidden', node !== el);
+        });
+        if (secureNote) {
+          secureNote.style.display = el === loaderEl ? 'block' : 'none';
+        }
+      }
 
       function isHttpUrl(url) {
         return /^https?:\\/\\//i.test(url);
@@ -160,9 +289,27 @@ export function renderRazorpayCheckoutPage(opts: {
         return /TrulyNikah/i.test(navigator.userAgent || '');
       }
 
+      function razorpayModalVisible() {
+        return !!(
+          document.querySelector('.razorpay-container') ||
+          document.querySelector('.razorpay-backdrop') ||
+          document.querySelector('iframe[src*="razorpay"]')
+        );
+      }
+
+      function hideLoaderWhenModalReady() {
+        var attempts = 0;
+        var timer = setInterval(function () {
+          attempts += 1;
+          if (razorpayModalVisible() || attempts > 120) {
+            clearInterval(timer);
+            loaderEl.classList.add('is-hidden');
+          }
+        }, 50);
+      }
+
       function showSuccess(response, deepTarget) {
-        document.getElementById('step-pay').classList.add('hidden');
-        document.getElementById('step-success').classList.remove('hidden');
+        showOnly(successEl);
         var msg = document.getElementById('success-msg');
         var openApp = document.getElementById('open-app');
 
@@ -175,9 +322,9 @@ export function renderRazorpayCheckoutPage(opts: {
         });
 
         if (deepTarget && !isHttpUrl(returnUrl)) {
-          msg.textContent = 'Your payment was completed. Return to the TrulyNikah app to finish.';
+          msg.textContent = 'Return to the TrulyNikah app to complete.';
           openApp.href = deepTarget;
-          openApp.classList.remove('hidden');
+          openApp.classList.remove('is-hidden');
           openApp.onclick = function (e) {
             e.preventDefault();
             window.location.href = deepTarget;
@@ -188,42 +335,68 @@ export function renderRazorpayCheckoutPage(opts: {
             }, 400);
           }
         } else if (!returnUrl) {
-          msg.textContent = 'Payment successful. Close this screen and complete verification in the app.';
+          msg.textContent = 'You can close this screen and return to the app.';
+          openApp.classList.add('is-hidden');
         }
       }
 
-      var options = {
-        key: '${key}',
-        amount: ${opts.amountPaise},
-        currency: '${currency}',
-        name: 'TrulyNikah',
-        description: 'Membership payment',
-        order_id: '${orderId}',
-        prefill: { name: '${name}', email: '${email}', contact: '${contact}' },
-        theme: { color: '#0d6e3a' },
-        handler: function (response) {
-          var q = new URLSearchParams({
-            razorpay_order_id: response.razorpay_order_id,
-            razorpay_payment_id: response.razorpay_payment_id,
-            razorpay_signature: response.razorpay_signature,
-            status: 'success'
-          });
-          if (returnUrl && isHttpUrl(returnUrl)) {
-            window.location.replace(buildReturnTarget(returnUrl, q));
-            return;
+      function buildOptions() {
+        return {
+          key: '${key}',
+          amount: ${opts.amountPaise},
+          currency: '${currency}',
+          name: 'TrulyNikah',
+          description: 'Membership payment',
+          order_id: '${orderId}',
+          prefill: { name: '${name}', email: '${email}', contact: '${contact}' },
+          theme: { color: '#0d6e3a', backdrop_color: '#6d6d6d' },
+          handler: function (response) {
+            var q = new URLSearchParams({
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+              status: 'success'
+            });
+            if (returnUrl && isHttpUrl(returnUrl)) {
+              window.location.replace(buildReturnTarget(returnUrl, q));
+              return;
+            }
+            var deepTarget = returnUrl ? buildReturnTarget(returnUrl, q) : null;
+            showSuccess(response, deepTarget);
+          },
+          modal: {
+            ondismiss: function () {
+              showOnly(cancelledEl);
+            }
           }
-          var deepTarget = returnUrl ? buildReturnTarget(returnUrl, q) : null;
-          showSuccess(response, deepTarget);
-        },
-        modal: {
-          ondismiss: function () {
-            document.getElementById('status').textContent = 'Payment cancelled.';
-          }
+        };
+      }
+
+      function openCheckout() {
+        if (typeof Razorpay === 'undefined') {
+          showOnly(errorEl);
+          return;
         }
+        showOnly(loaderEl);
+        loaderEl.classList.remove('is-hidden');
+        rzpInstance = new Razorpay(buildOptions());
+        rzpInstance.open();
+        hideLoaderWhenModalReady();
+      }
+
+      document.getElementById('btn-retry').addEventListener('click', openCheckout);
+      document.getElementById('btn-reload').addEventListener('click', function () {
+        window.location.reload();
+      });
+
+      var script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.async = true;
+      script.onload = openCheckout;
+      script.onerror = function () {
+        showOnly(errorEl);
       };
-      var rzp = new Razorpay(options);
-      document.getElementById('pay-btn').onclick = function () { rzp.open(); };
-      rzp.open();
+      document.head.appendChild(script);
     })();
   </script>
 </body>
