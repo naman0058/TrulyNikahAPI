@@ -41,8 +41,19 @@ export function toStoragePath(filename: string): string {
 
 export function toPublicMediaUrl(storagePath: string | null | undefined): string | null {
   if (!storagePath) return null;
-  if (storagePath.startsWith('http')) return storagePath;
-  return `${config.upload.publicMediaUrl}/${storagePath.replace(/^\/+/, '')}`;
+  const raw = String(storagePath).trim();
+  if (!raw) return null;
+  if (/^https?:\/\//i.test(raw)) return raw;
+
+  let relative = raw.replace(/\\/g, '/').replace(/^\/+/, '');
+  if (relative.startsWith('storage/')) {
+    relative = relative.slice('storage/'.length);
+  }
+  if (!relative.includes('/')) {
+    relative = `profile_images/${relative}`;
+  }
+
+  return `${config.upload.publicMediaUrl}/${relative}`;
 }
 
 export const PROFILE_IMAGE_FIELDS = [
