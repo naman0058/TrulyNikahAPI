@@ -15,6 +15,7 @@ import { V, CONTACT_ENQUIRY_FIELDS, SEARCH_BODY_FIELDS, normalizeSearchBody } fr
 import { searchProfiles as runProfileSearch, SearchFiltersInput } from '../services/search.service';
 import { getSearchFilterOptions } from '../constants/searchFilters';
 import { buildFullProfileResponse, FULL_PROFILE_INCLUDE } from '../services/profile-response.service';
+import { dedupeViewHistory, recordProfileView } from '../lib/view-history';
 
 export const getCountries = asyncHandler(async (_req, res) => {
   const countries = await prisma.country.findMany({ orderBy: { name: 'asc' } });
@@ -205,14 +206,22 @@ export const getDashboard = [
       prisma.profileView.findMany({
         where: { viewer_id: user.id },
         include: { viewedUser: { select: PUBLIC_USER_SELECT } },
-        take: 10,
-        orderBy: { created_at: 'desc' },
+        take: 30,
+        orderBy: [{ updated_at: 'desc' }, { created_at: 'desc' }],
       }),
       getBestMatches(user, 12),
       getNewProfiles(user, 8),
     ]);
 
-    return sendSuccess(res, 'Dashboard data', await enrichAndSerialize({ matches, recentProfiles, viewedProfiles, bestMatches, newProfiles }));
+    const uniqueViewedProfiles = dedupeViewHistory(viewedProfiles, (v) => v.viewed_user_id).slice(0, 10);
+
+    return sendSuccess(res, 'Dashboard data', await enrichAndSerialize({
+      matches,
+      recentProfiles,
+      viewedProfiles: uniqueViewedProfiles,
+      bestMatches,
+      newProfiles,
+    }));
   }),
 ];
 
@@ -249,9 +258,7 @@ export const viewProfile = [
       throw AppError.notFound('Profile not found');
     }
 
-    await prisma.profileView.create({
-      data: { viewer_id: req.userId!, viewed_user_id: profile.id },
-    });
+    await recordProfileView(req.userId!, profile.id);
 
     const payload = await buildFullProfileResponse(profile as never, { maskContact: true });
     return sendSuccess(res, 'Profile fetched', payload);

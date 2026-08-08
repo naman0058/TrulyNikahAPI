@@ -16,6 +16,7 @@ import {
 } from '../services/gallery-request.service';
 import { blockUser, removeFromShortlist, unblockUser } from '../services/social.service';
 import { PROFILE_IMAGE_FIELDS, toPublicMediaUrl } from '../middleware/upload';
+import { dedupeViewHistory } from '../lib/view-history';
 
 async function targetUserIdFromParams(req: AuthRequest): Promise<bigint> {
   return BigInt(routeParam(req.params.userId));
@@ -326,9 +327,10 @@ export const profileViewsByMe = [
     const views = await prisma.profileView.findMany({
       where: { viewer_id: req.userId! },
       include: { viewedUser: { select: PUBLIC_USER_SELECT } },
-      orderBy: { created_at: 'desc' },
+      orderBy: [{ updated_at: 'desc' }, { created_at: 'desc' }],
     });
-    return sendSuccess(res, 'Profiles viewed by me', await enrichAndSerialize(views));
+    const unique = dedupeViewHistory(views, (v) => v.viewed_user_id);
+    return sendSuccess(res, 'Profiles viewed by me', await enrichAndSerialize(unique));
   }),
 ];
 
@@ -338,8 +340,9 @@ export const profileViewsOfMe = [
     const views = await prisma.profileView.findMany({
       where: { viewed_user_id: req.userId! },
       include: { viewer: { select: PUBLIC_USER_SELECT } },
-      orderBy: { created_at: 'desc' },
+      orderBy: [{ updated_at: 'desc' }, { created_at: 'desc' }],
     });
-    return sendSuccess(res, 'Who viewed my profile', await enrichAndSerialize(views));
+    const unique = dedupeViewHistory(views, (v) => v.viewer_id);
+    return sendSuccess(res, 'Who viewed my profile', await enrichAndSerialize(unique));
   }),
 ];

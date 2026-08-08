@@ -17,6 +17,7 @@ import {
   TRUST_BADGE_FIELDS,
   V,
 } from '../utils/validation';
+import { dedupeViewHistory } from '../lib/view-history';
 
 export const updateBasic = [
   ...fullUserGuard,
@@ -359,9 +360,10 @@ export const contactViewsByMe = [
     const views = await prisma.contactView.findMany({
       where: { viewer_id: req.userId! },
       include: { viewedUser: { select: PUBLIC_USER_SELECT } },
-      orderBy: { created_at: 'desc' },
+      orderBy: [{ updated_at: 'desc' }, { created_at: 'desc' }],
     });
-    return sendSuccess(res, 'Contact views fetched', await enrichAndSerialize(views));
+    const unique = dedupeViewHistory(views, (v) => v.viewed_user_id);
+    return sendSuccess(res, 'Contact views fetched', await enrichAndSerialize(unique));
   }),
 ];
 
@@ -371,8 +373,9 @@ export const contactViewsOfMe = [
     const views = await prisma.contactView.findMany({
       where: { viewed_user_id: req.userId! },
       include: { viewer: { select: PUBLIC_USER_SELECT } },
-      orderBy: { created_at: 'desc' },
+      orderBy: [{ updated_at: 'desc' }, { created_at: 'desc' }],
     });
-    return sendSuccess(res, 'Who viewed my contact', await enrichAndSerialize(views));
+    const unique = dedupeViewHistory(views, (v) => v.viewer_id);
+    return sendSuccess(res, 'Who viewed my contact', await enrichAndSerialize(unique));
   }),
 ];
