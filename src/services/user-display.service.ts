@@ -1,6 +1,7 @@
 import prisma from '../lib/prisma';
 import { toPublicMediaUrl } from '../middleware/upload';
 import { sanitizeUser } from './auth.service';
+import { getPresenceForUsers, type PresenceStatus } from '../socket/presence';
 
 export const DISPLAY_NOT_AVAILABLE = 'not available';
 
@@ -235,6 +236,58 @@ export async function attachProfileImages<T>(payload: T): Promise<T> {
   return payload;
 }
 
+function applyPresenceFields(record: Record<string, unknown>, presence: PresenceStatus): void {
+  record.is_online = presence.is_online;
+  record.last_seen_at = presence.last_seen_at;
+  record.last_seen_ago = presence.last_seen_ago;
+}
+
+function applyPresenceToValue(
+  value: unknown,
+  presenceMap: Map<string, PresenceStatus>,
+  seen: WeakSet<object>
+): void {
+  if (value == null || typeof value !== 'object') return;
+  if (value instanceof Date) return;
+  if (seen.has(value as object)) return;
+  seen.add(value as object);
+
+  if (Array.isArray(value)) {
+    for (const item of value) applyPresenceToValue(item, presenceMap, seen);
+    return;
+  }
+
+  const record = value as Record<string, unknown>;
+  if (isUserLikeRecord(record)) {
+    const presence =
+      presenceMap.get(String(record.id)) ??
+      ({
+        user_id: String(record.id),
+        is_online: false,
+        last_seen_at: null,
+        last_seen_ago: null,
+      } satisfies PresenceStatus);
+    applyPresenceFields(record, presence);
+  }
+
+  for (const nested of Object.values(record)) {
+    if (nested && typeof nested === 'object') applyPresenceToValue(nested, presenceMap, seen);
+  }
+}
+
+/** Add is_online / last_seen_* on every user object in a payload (same as GET /presence). */
+export async function attachPresence<T>(payload: T): Promise<T> {
+  if (payload == null) return payload;
+
+  const userIds = new Set<string>();
+  collectUserIdsFromValue(payload, userIds, new WeakSet());
+  if (!userIds.size) return payload;
+
+  const presenceMap = await getPresenceForUsers([...userIds]);
+  applyPresenceToValue(payload, presenceMap, new WeakSet());
+  return payload;
+}
+
 function cloneAndEnrich(value: unknown, maps: NameMaps, seen: WeakMap<object, unknown>): unknown {
   if (value == null || typeof value !== 'object') return value;
   if (value instanceof Date) return value;
@@ -273,7 +326,8 @@ export async function enrichPayload<T>(payload: T): Promise<T> {
     enriched = cloneAndEnrich(payload, maps, new WeakMap()) as T;
   }
 
-  return attachProfileImages(enriched);
+  const withImages = await attachProfileImages(enriched);
+  return attachPresence(withImages);
 }
 
 /** Sanitize user + add display names (auth / profile updates). */

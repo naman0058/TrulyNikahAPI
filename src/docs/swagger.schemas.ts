@@ -412,6 +412,14 @@ export const swaggerSchemas: Record<string, OpenAPIV3.SchemaObject> = {
         example: 'https://api.trulynikah.com/media/profile_images/photo.jpg',
         description: 'Main profile photo — full public URL',
       },
+      is_online: { type: 'boolean', example: false, description: 'Socket presence (same as GET /presence)' },
+      last_seen_at: { type: 'string', format: 'date-time', nullable: true },
+      last_seen_ago: {
+        type: 'string',
+        nullable: true,
+        example: '5 minutes ago',
+        description: 'Human-readable last seen; null when is_online is true',
+      },
       status: { type: 'string', example: 'verified' },
       profile_visibility: { type: 'string', example: 'everyone' },
       created_at: { type: 'string', format: 'date-time' },
@@ -597,6 +605,9 @@ export const swaggerSchemas: Record<string, OpenAPIV3.SchemaObject> = {
             example: 'https://api.trulynikah.com/media/profile_images/photo.jpg',
             description: 'Main profile photo — full public URL',
           },
+          is_online: { type: 'boolean', example: false },
+          last_seen_at: { type: 'string', format: 'date-time', nullable: true },
+          last_seen_ago: { type: 'string', nullable: true, example: '2 hours ago' },
           profileManager: {
             type: 'object',
             properties: {
