@@ -3,7 +3,7 @@ import { hashPassword, verifyPassword } from '../lib/bcrypt';
 import { issueAccessTokenForUser } from './access-token.service';
 import { verifyUserTokenAllowExpired, tokenVersionFromPayload } from '../lib/jwt';
 import config from '../config';
-import { createAndSendOtp, createAndSendOtpForMobile, verifyOtpForUser, verifyMobileOtp, canResendOtp } from './otp.service';
+import { createAndSendOtpForMobile, verifyOtpForUser, verifyMobileOtp, canResendOtp } from './otp.service';
 import { calculateAge, generateMemberId, isProfileComplete } from '../utils/helpers';
 import { AppError, ErrorCode } from '../utils/errors';
 
@@ -41,11 +41,8 @@ export async function registerUser(input: {
     },
   });
 
-  const otpSent = await createAndSendOtp(user.id, input.contact_number);
-  if (!otpSent) throw AppError.internal('Failed to send OTP. Please try again.');
-
   const auth = issueAccessTokenForUser(user);
-  return { user, token: auth.token, auth, otpSent: true };
+  return { user, token: auth.token, auth };
 }
 
 export async function loginUser(email: string, password: string) {

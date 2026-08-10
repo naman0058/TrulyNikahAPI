@@ -57,7 +57,7 @@ export const register = [
     });
     return sendSuccess(
       res,
-      'Registration successful. OTP sent to your phone.',
+      'Registration successful. Verify your mobile using the OTP APIs.',
       {
         token: result.auth.token,
         token_type: result.auth.token_type,

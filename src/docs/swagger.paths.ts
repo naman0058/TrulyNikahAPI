@@ -139,7 +139,7 @@ function opDelete(tag: string, summary: string, opts?: OpOpts): OpenAPIV3.Operat
 
 export function buildSwaggerPaths(): OpenAPIV3.PathsObject {
   return {
-    '/auth/register': { post: opPost('Auth', 'Register new member', { body: S('RegisterRequest'), desc: 'Registered; OTP sent' }) },
+    '/auth/register': { post: opPost('Auth', 'Register new member', { body: S('RegisterRequest'), desc: 'Creates account and returns JWT. OTP is not sent here — use POST /auth/mobile/send-otp or POST /auth/otp/resend, then verify via POST /auth/otp/verify or POST /auth/mobile/verify-otp.' }) },
     '/auth/login': {
       post: opPost('Auth', 'Login with email and password', {
         body: S('LoginRequest'),
