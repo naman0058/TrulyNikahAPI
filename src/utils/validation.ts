@@ -191,6 +191,48 @@ export const ALLOWED_FAMILY_FIELDS = [
   'about_family',
 ] as const;
 
+const FAMILY_INT_FIELDS = ['brother', 'brother_married', 'sister', 'sister_married'] as const;
+
+const FAMILY_STRING_FIELDS = ALLOWED_FAMILY_FIELDS.filter(
+  (f) => f !== 'about_family' && !(FAMILY_INT_FIELDS as readonly string[]).includes(f)
+);
+
+/** All optional — send only fields the user filled. */
+export const FAMILY_BODY_VALIDATORS: ValidationChain[] = [
+  ...FAMILY_STRING_FIELDS.map((f) =>
+    body(f)
+      .optional({ values: 'null' })
+      .isString()
+      .trim()
+      .isLength({ max: 255 })
+      .withMessage(`${f} must be at most 255 characters`)
+  ),
+  body('about_family')
+    .optional({ values: 'null' })
+    .isString()
+    .trim()
+    .isLength({ max: 5000 })
+    .withMessage('about_family must be at most 5000 characters'),
+  ...FAMILY_INT_FIELDS.map((f) =>
+    body(f)
+      .optional({ values: 'null' })
+      .isInt({ min: 0, max: 50 })
+      .withMessage(`${f} must be an integer between 0 and 50`)
+      .toInt()
+  ),
+];
+
+/** Normalize empty strings to null for optional family fields. */
+export function normalizeFamilyBody(body: Record<string, unknown>): Record<string, unknown> {
+  const out = pickBody(body, [...ALLOWED_FAMILY_FIELDS]);
+  for (const key of ALLOWED_FAMILY_FIELDS) {
+    if (key in out && (out[key] === '' || out[key] === undefined)) {
+      out[key] = null;
+    }
+  }
+  return out;
+}
+
 export const ALLOWED_RELIGIOUS_FIELDS = ['religious', 'quran', 'namaz', 'roza', 'smoke', 'drink'] as const;
 
 export const SEARCH_BODY_FIELDS = [

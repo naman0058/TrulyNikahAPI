@@ -41,6 +41,24 @@ const userDisplayNameFields: OpenAPIV3.SchemaObject = {
   },
 };
 
+/** Pre-filled Swagger "Try it out" body for POST /me/family */
+export const FAMILY_INFORMATION_BODY_EXAMPLE = {
+  family_type: 'Joint Family',
+  family_status: 'Middle Class',
+  native_state: 'Uttar Pradesh',
+  native_city: 'Lucknow',
+  father_name: 'Mohammed Ahmed',
+  father_occupation: 'Business',
+  mother_name: 'Fatima Ahmed',
+  mother_occupation: 'Homemaker',
+  brother: 2,
+  brother_married: 1,
+  sister: 1,
+  sister_married: 0,
+  about_family:
+    'We are a close-knit family with traditional values. Father runs a small business and we live together in Lucknow.',
+} as const;
+
 export const swaggerSchemas: Record<string, OpenAPIV3.SchemaObject> = {
   ApiResponse: {
     type: 'object',
@@ -656,17 +674,30 @@ export const swaggerSchemas: Record<string, OpenAPIV3.SchemaObject> = {
   },
   FamilyInformationRequest: {
     type: 'object',
+    description:
+      'All fields optional. Send only fields the user filled. Omitted fields are left unchanged on update. ' +
+      'Use null or empty string to clear a field.',
     properties: {
-      father_name: { type: 'string' },
-      father_occupation: { type: 'string' },
-      mother_name: { type: 'string' },
-      mother_occupation: { type: 'string' },
-      brothers: { type: 'string' },
-      sisters: { type: 'string' },
-      family_type: { type: 'string' },
-      family_status: { type: 'string' },
-      family_values: { type: 'string' },
+      family_type: { type: 'string', nullable: true, example: 'Joint Family' },
+      family_status: { type: 'string', nullable: true, example: 'Middle Class' },
+      native_state: { type: 'string', nullable: true, example: 'Uttar Pradesh' },
+      native_city: { type: 'string', nullable: true, example: 'Lucknow' },
+      father_name: { type: 'string', nullable: true, example: 'Mohammed Ahmed' },
+      father_occupation: { type: 'string', nullable: true, example: 'Business' },
+      mother_name: { type: 'string', nullable: true, example: 'Fatima Ahmed' },
+      mother_occupation: { type: 'string', nullable: true, example: 'Homemaker' },
+      brother: { type: 'integer', nullable: true, minimum: 0, maximum: 50, example: 2 },
+      brother_married: { type: 'integer', nullable: true, minimum: 0, maximum: 50, example: 1 },
+      sister: { type: 'integer', nullable: true, minimum: 0, maximum: 50, example: 1 },
+      sister_married: { type: 'integer', nullable: true, minimum: 0, maximum: 50, example: 0 },
+      about_family: {
+        type: 'string',
+        nullable: true,
+        example:
+          'We are a close-knit family with traditional values. Father runs a small business and we live together in Lucknow.',
+      },
     },
+    example: { ...FAMILY_INFORMATION_BODY_EXAMPLE },
   },
   ReligiousInfoRequest: {
     type: 'object',

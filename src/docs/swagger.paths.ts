@@ -1,5 +1,5 @@
 import { OpenAPIV3 } from 'openapi-types';
-import { S } from './swagger.schemas';
+import { S, FAMILY_INFORMATION_BODY_EXAMPLE } from './swagger.schemas';
 
 const jsonOk = (description: string): OpenAPIV3.ResponseObject => ({
   description,
@@ -33,6 +33,8 @@ type OpOpts = {
   query?: OpenAPIV3.ParameterObject[];
   body?: string;
   bodyRequired?: boolean;
+  /** Pre-fills Swagger "Edit Value" request body (use with body schema ref) */
+  bodyExample?: Record<string, unknown>;
   multipart?: string;
   noBody?: boolean;
 };
@@ -62,10 +64,24 @@ function queryParam(
   };
 }
 
-function jsonBody(schemaRef: string, required = true): OpenAPIV3.RequestBodyObject {
+function jsonBody(
+  schemaRef: string,
+  required = true,
+  example?: Record<string, unknown>
+): OpenAPIV3.RequestBodyObject {
+  const media: OpenAPIV3.MediaTypeObject = { schema: { $ref: schemaRef } };
+  if (example) {
+    media.example = example;
+    media.examples = {
+      sample: {
+        summary: 'Sample request (ready to Execute)',
+        value: example,
+      },
+    };
+  }
   return {
     required,
-    content: { 'application/json': { schema: { $ref: schemaRef } } },
+    content: { 'application/json': media },
   };
 }
 
@@ -108,7 +124,7 @@ function opPost(tag: string, summary: string, opts?: OpOpts): OpenAPIV3.Operatio
       content: { 'multipart/form-data': { schema: { $ref: opts.multipart } } },
     };
   } else if (opts?.body) {
-    operation.requestBody = jsonBody(opts.body, opts.bodyRequired ?? true);
+    operation.requestBody = jsonBody(opts.body, opts.bodyRequired ?? true, opts.bodyExample);
   } else if (!opts?.noBody) {
     operation.requestBody = jsonBody(S('ApiResponse'), false);
   }
@@ -383,7 +399,18 @@ export function buildSwaggerPaths(): OpenAPIV3.PathsObject {
           'Send `null` or empty string to clear a field. ID fields accept string or number.',
       }),
     },
-    '/me/family': { post: opPost('Profile', 'Save family information', { security: bearer, body: S('FamilyInformationRequest') }) },
+    '/me/family': {
+      post: opPost('Profile', 'Save family information', {
+        security: bearer,
+        body: S('FamilyInformationRequest'),
+        bodyRequired: false,
+        bodyExample: { ...FAMILY_INFORMATION_BODY_EXAMPLE },
+        detail:
+          '**All fields optional** (matches `family_information` table). Send only filled fields. ' +
+          'Integer fields: `brother`, `brother_married`, `sister`, `sister_married`. ' +
+          'Creates or updates the single family row for the logged-in user.',
+      }),
+    },
     '/me/religious': { post: opPost('Profile', 'Save religious and lifestyle info', { security: bearer, body: S('ReligiousInfoRequest') }) },
     '/me/trust-badge': {
       get: opGet('Profile', 'Get my trust badge status', { security: bearer }),

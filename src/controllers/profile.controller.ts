@@ -13,6 +13,8 @@ import {
   ALLOWED_FAMILY_FIELDS,
   ALLOWED_PARTNER_FIELDS,
   ALLOWED_RELIGIOUS_FIELDS,
+  FAMILY_BODY_VALIDATORS,
+  normalizeFamilyBody,
   pickBody,
   TRUST_BADGE_FIELDS,
   V,
@@ -185,10 +187,11 @@ export const updatePartnerPreferences = [
 
 export const updateFamily = [
   ...fullUserGuard,
-  validateBody([...ALLOWED_FAMILY_FIELDS], ALLOWED_FAMILY_FIELDS.map((f) => body(f).optional())),
+  validateBody([...ALLOWED_FAMILY_FIELDS], FAMILY_BODY_VALIDATORS),
   asyncHandler(async (req: AuthRequest, res) => {
     const existing = await prisma.familyInformation.findFirst({ where: { user_id: req.userId! } });
-    const data = { user_id: req.userId!, ...pickBody(req.body, [...ALLOWED_FAMILY_FIELDS]) };
+    const fields = normalizeFamilyBody(req.body as Record<string, unknown>);
+    const data = { user_id: req.userId!, ...fields };
     const family = existing
       ? await prisma.familyInformation.update({ where: { id: existing.id }, data })
       : await prisma.familyInformation.create({ data });
