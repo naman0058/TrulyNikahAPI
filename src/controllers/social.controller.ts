@@ -6,7 +6,7 @@ import { AppError } from '../utils/errors';
 import { V } from '../utils/validation';
 import {
   acceptGalleryRequest,
-  hasAcceptedGalleryAccess,
+  canViewUserGallery,
   listGalleryRequestsAccepted,
   listGalleryRequestsGrantedByMe,
   listGalleryRequestsReceived,
@@ -277,7 +277,7 @@ export const rejectGalleryRequestHandler = [
   }),
 ];
 
-/** View another user's gallery after they accepted your request */
+/** View another user's gallery (accepted request, or profile_visibility = everyone) */
 export const viewUserGallery = [
   ...fullUserGuard,
   validate([V.positiveIntParam('userId', 'userId')]),
@@ -289,7 +289,7 @@ export const viewUserGallery = [
       throw AppError.badRequest('Use GET /me/gallery for your own gallery');
     }
 
-    const access = await hasAcceptedGalleryAccess(authUserId, targetId);
+    const access = await canViewUserGallery(authUserId, targetId);
     if (!access) {
       throw AppError.forbidden('Gallery access not granted. Send a request and wait for acceptance.');
     }

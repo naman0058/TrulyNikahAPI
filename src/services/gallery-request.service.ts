@@ -459,3 +459,20 @@ export async function hasAcceptedGalleryAccess(fromUserId: bigint, toUserId: big
     return rows.length > 0;
   }
 }
+
+/** Gallery view allowed when request accepted OR owner profile_visibility is everyone. */
+export async function canViewUserGallery(viewerId: bigint, ownerId: bigint): Promise<boolean> {
+  if (await hasAcceptedGalleryAccess(viewerId, ownerId)) {
+    return true;
+  }
+
+  const owner = await prisma.user.findUnique({
+    where: { id: ownerId },
+    select: { profile_visibility: true },
+  });
+  if (!owner) return false;
+
+  const visibility = String(owner.profile_visibility ?? 'everyone').trim().toLowerCase();
+
+  return visibility === 'everyone';
+}

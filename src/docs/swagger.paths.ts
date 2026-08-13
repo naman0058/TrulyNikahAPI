@@ -530,9 +530,13 @@ export function buildSwaggerPaths(): OpenAPIV3.PathsObject {
       }),
     },
     '/gallery-requests/{userId}/gallery': {
-      get: opGet('Social', 'View user gallery after request accepted', {
+      get: opGet('Social', 'View user gallery', {
         security: bearer,
         params: [pathParam('userId', 'User whose gallery to view', 42)],
+        detail:
+          'Returns gallery photo URLs (`profile_image`, `profile_image1`–`4`). ' +
+          '**No gallery request needed** when the member\'s `profile_visibility` is **everyone**. ' +
+          'Otherwise requires an accepted gallery request from that user.',
       }),
     },
     '/reports': { post: opPost('Social', 'Report profile', { security: bearer, body: S('ReportRequest') }) },
