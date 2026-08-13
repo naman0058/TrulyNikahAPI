@@ -91,12 +91,15 @@ export const refreshToken = [
       throw AppError.unauthorized('Token required', ErrorCode.AUTH_REQUIRED);
     }
     const result = await refreshUserAccessToken(raw);
-    return sendSuccess(res, 'Token refreshed', {
-      token: result.token,
-      token_type: result.token_type,
-      expires_in: result.expires_in,
-      user: serialize(await enrichUserForClient(result.user as never)),
-    });
+    return sendSuccess(
+      res,
+      'Token refreshed',
+      await buildLoginPayload(result.user, {
+        token: result.token,
+        token_type: result.token_type,
+        expires_in: result.expires_in,
+      })
+    );
   }),
 ];
 
@@ -188,8 +191,9 @@ export const me = [
 
 export const logout = [
   authenticate,
-  asyncHandler(async (req: AuthRequest, res) => {
-    await invalidateUserSessions(req.userId!);
+  asyncHandler(async (_req: AuthRequest, res) => {
+    // Do not bump api_token_version — mobile may refresh the same JWT after logout UI;
+    // password change still invalidates all devices via invalidateUserSessions.
     return sendSuccess(res, 'Logged out successfully');
   }),
 ];

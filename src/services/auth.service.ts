@@ -1,7 +1,7 @@
 import prisma from '../lib/prisma';
 import { hashPassword, verifyPassword } from '../lib/bcrypt';
 import { issueAccessTokenForUser } from './access-token.service';
-import { verifyUserTokenAllowExpired, tokenVersionFromPayload } from '../lib/jwt';
+import { verifyUserTokenAllowExpired, tokenVersionsMatch } from '../lib/jwt';
 import config from '../config';
 import { createAndSendOtpForMobile, verifyOtpForUser, verifyMobileOtp, canResendOtp } from './otp.service';
 import { calculateAge, generateMemberId, isProfileComplete } from '../utils/helpers';
@@ -173,7 +173,7 @@ export async function issueInternalToken(userId: bigint) {
   return issueAccessTokenForUser(user).token;
 }
 
-/** Invalidate all saved JWTs for this user (logout, password change). */
+/** Invalidate all saved JWTs (password change, force logout all devices). */
 export async function invalidateUserSessions(userId: bigint): Promise<void> {
   await prisma.user.update({
     where: { id: userId },
@@ -206,7 +206,7 @@ export async function refreshUserAccessToken(rawToken: string) {
 
   assertUserCanLogin(user);
 
-  if (tokenVersionFromPayload(payload) !== user.api_token_version) {
+  if (!tokenVersionsMatch(payload, user)) {
     throw AppError.unauthorized('Session ended. Please login again.', ErrorCode.AUTH_INVALID);
   }
 
@@ -215,8 +215,11 @@ export async function refreshUserAccessToken(rawToken: string) {
     data: { last_login_at: new Date() },
   });
 
-  const auth = issueAccessTokenForUser(user);
-  return { user, ...auth };
+  const fresh = await prisma.user.findUnique({ where: { id: user.id } });
+  if (!fresh) throw AppError.unauthorized('User not found', ErrorCode.AUTH_INVALID);
+
+  const auth = issueAccessTokenForUser(fresh);
+  return { user: fresh, ...auth };
 }
 
 export async function checkAvailability(email: string, contact_number: string) {

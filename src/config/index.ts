@@ -55,12 +55,16 @@ function buildCorsOrigins(): string[] {
 
 function parseJwtExpiresInSeconds(raw: string): number {
   const trimmed = raw.trim();
-  const match = /^(\d+)([smhdw])$/i.exec(trimmed);
-  if (!match) return 365 * 86400;
-  const n = parseInt(match[1], 10);
-  const unit = match[2].toLowerCase();
-  const mult: Record<string, number> = { s: 1, m: 60, h: 3600, d: 86400, w: 604800 };
-  return n * (mult[unit] ?? 86400);
+  const unitMatch = /^(\d+)([smhdw])$/i.exec(trimmed);
+  if (unitMatch) {
+    const n = parseInt(unitMatch[1], 10);
+    const mult: Record<string, number> = { s: 1, m: 60, h: 3600, d: 86400, w: 604800 };
+    return n * (mult[unitMatch[2].toLowerCase()] ?? 86400);
+  }
+  if (/^\d+$/.test(trimmed)) {
+    return parseInt(trimmed, 10);
+  }
+  return 365 * 86400;
 }
 
 export const config = {

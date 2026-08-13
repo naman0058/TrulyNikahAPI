@@ -5,14 +5,36 @@ export type TokenPayload = {
   sub: string;
   type: 'user' | 'admin';
   email: string;
-  /** Bumped on logout — must match users.api_token_version */
+  /** Bumped on password change / forced logout — must match users.api_token_version */
   tv?: number;
   exp?: number;
   iat?: number;
 };
 
+/** Coalesce missing/null DB or JWT token version to 0 (legacy tokens). */
+export function normalizeTokenVersion(value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Math.max(0, Math.trunc(value));
+  }
+  if (typeof value === 'string' && /^\d+$/.test(value.trim())) {
+    return parseInt(value.trim(), 10);
+  }
+  return 0;
+}
+
 export function tokenVersionFromPayload(payload: TokenPayload): number {
-  return payload.tv ?? 0;
+  return normalizeTokenVersion(payload.tv);
+}
+
+export function userTokenVersion(user: { api_token_version?: number | null }): number {
+  return normalizeTokenVersion(user.api_token_version);
+}
+
+export function tokenVersionsMatch(
+  payload: TokenPayload,
+  user: { api_token_version?: number | null }
+): boolean {
+  return tokenVersionFromPayload(payload) === userTokenVersion(user);
 }
 
 export function signUserToken(userId: bigint, email: string, tokenVersion = 0): string {
@@ -20,9 +42,11 @@ export function signUserToken(userId: bigint, email: string, tokenVersion = 0): 
     sub: userId.toString(),
     type: 'user',
     email,
-    tv: tokenVersion,
+    tv: normalizeTokenVersion(tokenVersion),
   };
-  return jwt.sign(payload, config.jwt.secret, { expiresIn: config.jwt.expiresIn } as jwt.SignOptions);
+  return jwt.sign(payload, config.jwt.secret, {
+    expiresIn: config.jwt.expiresInSeconds,
+  });
 }
 
 export function signAdminToken(adminId: bigint, email: string): string {

@@ -1,12 +1,13 @@
 import { NextFunction, Request, Response } from 'express';
 import { ValidationChain } from 'express-validator';
 import { JsonWebTokenError, TokenExpiredError } from 'jsonwebtoken';
-import { verifyUserToken, tokenVersionFromPayload } from '../lib/jwt';
+import { verifyUserToken, tokenVersionsMatch } from '../lib/jwt';
 import prisma from '../lib/prisma';
 import { sendError } from '../utils/response';
 import { AppError, ErrorCode } from '../utils/errors';
 import { formatValidationErrors, ValidateOptions } from '../utils/validation';
 import { User } from '@prisma/client';
+import config from '../config';
 
 export type AuthRequest = Request & { user?: User; userId?: bigint };
 
@@ -49,7 +50,7 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
     if (!user) {
       return sendError(res, 'User not found', 401, { code: ErrorCode.AUTH_INVALID });
     }
-    if (tokenVersionFromPayload(payload) !== user.api_token_version) {
+    if (!tokenVersionsMatch(payload, user)) {
       return sendError(res, 'Session ended. Please login again.', 401, { code: ErrorCode.AUTH_INVALID });
     }
     req.user = user;
@@ -57,7 +58,10 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
     next();
   } catch (err) {
     if (err instanceof TokenExpiredError) {
-      return sendError(res, 'Token expired', 401, { code: ErrorCode.AUTH_EXPIRED });
+      return sendError(res, 'Token expired', 401, {
+        code: ErrorCode.AUTH_EXPIRED,
+        meta: { refreshable: true, refresh_url: `${config.apiPrefix}/auth/refresh` },
+      });
     }
     if (err instanceof JsonWebTokenError) {
       return sendError(res, 'Invalid token', 401, { code: ErrorCode.AUTH_INVALID });

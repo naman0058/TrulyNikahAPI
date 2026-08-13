@@ -2,7 +2,7 @@ import type { Server as HttpServer } from 'http';
 import { Server, Socket } from 'socket.io';
 import config from '../config';
 import prisma from '../lib/prisma';
-import { verifyUserToken, tokenVersionFromPayload } from '../lib/jwt';
+import { verifyUserToken, tokenVersionsMatch } from '../lib/jwt';
 
 export type PresenceStatus = {
   user_id: string;
@@ -129,7 +129,7 @@ async function authenticateSocket(socket: Socket): Promise<string> {
     select: { id: true, api_token_version: true },
   });
   if (!user) throw new Error('User not found');
-  if (tokenVersionFromPayload(payload) !== user.api_token_version) {
+  if (!tokenVersionsMatch(payload, user)) {
     throw new Error('Session ended');
   }
   return payload.sub;

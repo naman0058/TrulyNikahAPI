@@ -1,5 +1,5 @@
 import config from '../config';
-import { signUserToken } from '../lib/jwt';
+import { signUserToken, userTokenVersion } from '../lib/jwt';
 
 export type IssuedAccessToken = {
   token: string;
@@ -13,7 +13,7 @@ export function issueAccessTokenForUser(user: {
   api_token_version: number;
 }): IssuedAccessToken {
   return {
-    token: signUserToken(user.id, user.email, user.api_token_version),
+    token: signUserToken(user.id, user.email, userTokenVersion(user)),
     token_type: 'Bearer',
     expires_in: config.jwt.expiresInSeconds,
   };
